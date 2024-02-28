@@ -13,14 +13,21 @@ jobs:
   sample:
     runs-on: ubuntu-latest
     steps:
-      # Checkout the repo
       - uses: actions/checkout@v3
         with:
-          fetch-depth: 0 # needed to checkout all branches for this Action to work
-     # git checkout
-      - name: check for file differences
-        run: git diff --compact-summary --word-diff-regex=spec_version -q runtime/amplitude/src/lib.rs >> diff.txt
-      - name: print out the differences
-        run: cat diff.txt
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
+      - name: Get changed files
+        id: changed-files
+        run: |
+          if ${{ github.event_name == 'pull_request' }}; then
+              echo "changed_files=$(git diff --compact-summary --word-diff-regex=spec_version -q runtime/amplitude/src/lib.rs -r HEAD^1 HEAD | xargs)" >> $GITHUB_OUTPUT
+          else
+              echo "changed_files=$(git diff --compact-summary --word-diff-regex=spec_version -q runtime/amplitude/src/lib.rs ${{ github.event.before }} ${{ github.event.after }} | xargs)" >> $GITHUB_OUTPUT
+          fi
+      - name: List changed files
+        run: |
+          for file in ${{ steps.changed-files.outputs.changed_files }}; do
+              echo "$file was changed"
+          done
 
 
