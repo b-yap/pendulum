@@ -25,7 +25,7 @@ jobs:
               echo "changed_files=$(git diff ${{ github.event.before }} ${{ github.event.after }} runtime/amplitude/src/lib.rs | xargs)" >> $GITHUB_OUTPUT
           fi
       - name: Check if there's a change of the spec version
-        run: if [$(grep -o -i "spec_version" $GITHUB_OUTPUT | wc -l) -gt 1]
-            then
-                echo "There's a change of the spec version."
-            fi
+        run: |
+          if [$(grep -o -i "spec_version" $GITHUB_OUTPUT | wc -l) -gt 1]; then
+              echo "There's a change of the spec version."
+          fi
