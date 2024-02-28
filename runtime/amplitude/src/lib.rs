@@ -271,7 +271,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_version: 15,
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
-	transaction_version: 12,
+	transaction_version: 13,
 	state_version: 1,
 };
 
@@ -1753,8 +1753,6 @@ impl_runtime_apis! {
 			signature_check: bool,
 			select: frame_try_runtime::TryStateSelect
 		) -> Weight {
-			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
-			// have a backtrace here.
 			Executive::try_execute_block(block, state_root_check, signature_check, select).expect("execute-block failed")
 		}
 	}
