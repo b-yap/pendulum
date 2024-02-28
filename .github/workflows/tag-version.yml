@@ -1,45 +1,36 @@
-name: Versioning
+name: CI
 
 on:
   pull_request:
-    branches: main
-    types: [opened, synchronize]
+    branches:
+      - main
 
 jobs:
-  version:
-    runs-on: ubuntu-latest
-
+  # ------------------------------------------------------------------------------------------------------------------------------------------------
+  # Event `pull_request`: Compare the last commit of the main branch or last remote commit of the PR branch -> to the current commit of a PR branch.
+  # ------------------------------------------------------------------------------------------------------------------------------------------------
+  changed_files:
+    runs-on: ubuntu-latest  # windows-latest || macos-latest
+    name: Test changed-files
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Set up Git
-        uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
         with:
-          python-version: '3.x'
-          repository: ${{ github.repository }}
+          fetch-depth: 0  # OR "2" -> To retrieve the preceding commit.
 
-      - name: Get current version
-        id: get_version
-        run: echo "version= $(git describe --abbrev=0 --tags)" >> $GITHUB_CURR_VERSION
+      # -----------------------------------------------------------------------------------------------------------
+      # Example 1
+      # -----------------------------------------------------------------------------------------------------------
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v42
+        # To compare changes between the current commit and the last pushed remote commit set `since_last_remote_commit: true`. e.g
+        # with:
+        #   since_last_remote_commit: true
 
-      - name: Determine version type
-        id: bump_version
+      - name: List all changed files
+        env:
+          ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
-          export major=$(echo ${{ steps.get_version.outputs.version }} | cut -d '.' -f 1)
-          export minor=$(echo ${{ steps.get_version.outputs.version }} | cut -d '.' -f 2)
-          export patch=$(echo ${{ steps.get_version.outputs.version }} | cut -d '.' -f 3)
-
-          if [ -n "${{ github.event.pull_request.labels.find(x => x.name == 'major') }}" ]; then
-            echo "version= ${major}.0.0" >> $GITHUB_VERSION_TYPE
-          elif [ -n "${{ github.event.pull_request.labels.find(x => x.name == 'minor') }}" ]; then
-            echo "version= ${major}.${minor+1}.0" >> $GITHUB_VERSION_TYPE
-          else
-            echo "version= ${major}.${minor}.${patch+1}" >> $GITHUB_VERSION_TYPE
-          fi
-
-      - name: Create new tag
-        uses: anothrNick/github-tag-action@v1.12.2
-        with:
-          tag: ${{ steps.bump_version.outputs.version }}
-          message: 'New version'
+          for file in ${ALL_CHANGED_FILES}; do
+            echo "$file was changed"
+          done
