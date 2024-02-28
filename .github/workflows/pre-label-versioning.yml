@@ -1,14 +1,37 @@
-name: "Check PR content"
-on: [pull_request]
+name: check-diff
+
+# Run on all pull_request related events
+on:
+  pull_request:
+
+permissions:
+  contents: read # this is necessary for the Action to be able to read the contents of the repo
 
 jobs:
-  check_pr:
+  sample:
     runs-on: ubuntu-latest
     steps:
-      - name: Check PR
-        uses: JJ/github-pr-contains-action@releases/v14
+      # Checkout the repo
+      - uses: actions/checkout@v3
         with:
-          github-token: ${{github.token}}
-          bodyContains: 'spec_version'
-          diffContains: 'spec_version'
-          waivedUsers: "SomeOne|dependabot[bot]"
+          fetch-depth: 0 # needed to checkout all branches for this Action to work
+
+      # Check the PR diff using the current branch and the base branch of the PR
+      - uses: GrantBirki/git-diff-action@vX.X.X
+        id: git-diff-action
+        with:
+          json_diff_file_output: diff.json
+          search_path: 'runtime/amplitude/src/lib.rs'
+          file_output_only: "true"
+
+      # Print the diff in JSON format
+      - name: print json diff
+        env:
+          DIFF: ${{ steps.git-diff-action.outputs.json-diff-path }}
+        run: cat $DIFF
+
+      # Print the diff in raw git format
+      - name: print raw diff
+        env:
+          DIFF: ${{ steps.git-diff-action.outputs.raw-diff-path }}
+        run: cat $DIFF
