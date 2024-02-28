@@ -20,14 +20,15 @@ jobs:
         id: changed-files
         run: |
           if ${{ github.event_name == 'pull_request' }}; then
-              echo "changed_files=$(git diff --compact-summary --word-diff-regex=spec_version -q runtime/amplitude/src/lib.rs -r HEAD^1 HEAD | xargs)" >> $GITHUB_OUTPUT
+              echo "changed_files=$(git diff --compact-summary --word-diff-regex=spec_version -q runtime/amplitude/src/lib.rs HEAD^1 HEAD | xargs)" >> $GITHUB_OUTPUT
           else
-              echo "changed_files=$(git diff --compact-summary --word-diff-regex=spec_version -q runtime/amplitude/src/lib.rs ${{ github.event.before }} ${{ github.event.after }} | xargs)" >> $GITHUB_OUTPUT
+              echo "changed_files=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | xargs)" >> $GITHUB_OUTPUT
           fi
       - name: List changed files
         run: |
           for file in ${{ steps.changed-files.outputs.changed_files }}; do
               echo "$file was changed"
           done
+
 
 
