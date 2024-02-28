@@ -1,48 +1,44 @@
-name: Update version and create Release's PR Workflow
+name: Versioning
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Pendulum version update'
-        required: true
-        default: 'minor'
-        type: choice
-        options:
-          - major
-          - minor
-          - patch
+  pull_request:
+    types: [opened, synchronize]
 
 jobs:
   version:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Set up Git
+        uses: actions/setup-python@v2
         with:
-          node-version: "16.x"
-      - name: Install dependencies
-        run: npm install
-    - name: Set up Git
-      run: |
-        git config user.name "b-yap"
-        git config user.email "2826165+b-yap@users.noreply.github.com"
-        - name: Update the version
-        id: update_version
+          python-version: '3.x'
+          repository: ${{ github.repository }}
+
+      - name: Get current version
+        id: get_version
+        run: echo "version= $(git describe --abbrev=0 --tags)" >> $GITHUB_CURR_VERSION
+
+      - name: Determine version type
+        id: bump_version
         run: |
-        echo "version=$(npm version ${{ github.event.inputs.version }} --no-git-				  	tag-version)" >> $GITHUB_OUTPUT
-        - name: Update Changelog
-      id: update_changelog
-        run: |
-          sed -i 's/Unreleased/${{ steps.update_version.outputs.version }}/g'   CHANGELOG.md
-        - name: Create pull request
-          id: create_pr
-          uses: peter-evans/create-pull-request@v5
-          with:
-            token: ${{ secrets.GITHUB_TOKEN }}
-            branch: release/${{ steps.update_version.outputs.version }}
-            title: "Release: ${{ steps.update_version.outputs.version }} Pull Request"
-            body: "This pull request contains the updated package.json with the new   	release version"
-            base: main
+          export major=$(echo ${{ steps.get_version.outputs.version }} | cut -d '.' -f 1)
+          export minor=$(echo ${{ steps.get_version.outputs.version }} | cut -d '.' -f 2)
+          export patch=$(echo ${{ steps.get_version.outputs.version }} | cut -d '.' -f 3)
+
+          if [ -n "${{ github.event.pull_request.labels.find(x => x.name == 'major') }}" ]; then
+            echo "version= ${major}.0.0" >> $GITHUB_VERSION_TYPE
+          elif [ -n "${{ github.event.pull_request.labels.find(x => x.name == 'minor') }}" ]; then
+            echo "version= ${major}.${minor+1}.0" >> $GITHUB_VERSION_TYPE
+          else
+            echo "version= ${major}.${minor}.${patch+1}" >> $GITHUB_VERSION_TYPE
+          fi
+
+      - name: Create new tag
+        uses: anothrNick/github-tag-action@v1.12.2
+        with:
+          tag: ${{ steps.bump_version.outputs.version }}
+          message: 'New version'
