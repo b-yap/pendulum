@@ -3,6 +3,8 @@ name: check-diff
 # Run on all pull_request related events
 on:
   pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read # this is necessary for the Action to be able to read the contents of the repo
