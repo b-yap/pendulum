@@ -1,10 +1,8 @@
-name: check-diff
+name: sample-workflow
 
 # Run on all pull_request related events
 on:
   pull_request:
-    branches:
-      - main
 
 permissions:
   contents: read # this is necessary for the Action to be able to read the contents of the repo
@@ -13,19 +11,29 @@ jobs:
   sample:
     runs-on: ubuntu-latest
     steps:
+      # Checkout the repo
       - uses: actions/checkout@v3
         with:
-          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
-      - name: Get the changes of Amplitude
-        id: changed-files
-        run: |
-          if ${{ github.event_name == 'pull_request' }}; then
-              echo "changed_files=$(git diff main HEAD runtime/amplitude/src/lib.rs | xargs)" >> $GITHUB_OUTPUT
-          else
-              echo "changed_files=$(git diff ${{ github.event.before }} ${{ github.event.after }} runtime/amplitude/src/lib.rs | xargs)" >> $GITHUB_OUTPUT
-          fi
-      - name: Check if there's a change of the spec version
-        run: |
-          if [$(grep -o -i "spec_version" $GITHUB_OUTPUT | wc -l) -gt 1]; then
-              echo "There's a change of the spec version."
-          fi
+          fetch-depth: 0 # needed to checkout all branches for this Action to work
+
+      # Check the PR diff using the current branch and the base branch of the PR
+      - uses: GrantBirki/git-diff-action@v2.4.1
+        id: git-diff-action
+        with:
+          # Only look in the src/ directory
+          search_path: runtime/amplitude/src/lib.rs
+          json_diff_file_output: diff.json
+          raw_diff_file_output: diff.txt
+          file_output_only: "true"
+
+      # Print the diff in JSON format
+      - name: print json diff
+        env:
+          DIFF: ${{ steps.git-diff-action.outputs.json-diff-path }}
+        run: cat $DIFF
+
+      # Print the diff in raw git format
+      - name: print raw diff
+        env:
+          DIFF: ${{ steps.git-diff-action.outputs.raw-diff-path }}
+        run: cat $DIFF
