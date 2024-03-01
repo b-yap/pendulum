@@ -34,7 +34,7 @@ jobs:
 #      - name: Print the runtime
 #        run: |
 #            echo This is for ${{ env.RELEASE_RUNTIME }} runtime
-    checks-for-release:
+    checks-and-test:
       runs-on: ubuntu-latest
       steps:
         - name: Freeing up more disk space
@@ -91,7 +91,7 @@ jobs:
           run: cargo build --release
 
     srtool:
-      needs: checks-for-release
+      needs: checks-and-test
       runs-on: ubuntu-latest
       strategy:
         matrix:
