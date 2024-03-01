@@ -21,12 +21,12 @@ jobs:
         FOR_RELEASE=true
         PR_TITLE=github.event.pull_request.title
     - name: Check if for Amplitude runtime
-      if: ${{ contains($PR_TITLE, 'amplitude') }}
+      if: ${{ $FOR_RELEASE && contains($PR_TITLE, 'amplitude') }}
       run: |
         RUNTIME=Amplitude
         echo This is for Amplitude runtime
     - name: Check if for Pendulum runtime
-      if: ${{ contains($PR_TITLE, 'pendulum') }}
+      if: ${{ $FOR_RELEASE && contains($PR_TITLE, 'pendulum') }}
       run: |
           RUNTIME=Pendulum
           echo This is for Pendulum runtime
