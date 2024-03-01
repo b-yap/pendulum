@@ -19,18 +19,19 @@ jobs:
       - uses: actions/checkout@v3
       - name: Check if PR titles says it's for release
         if: ${{ contains(github.event.pull_request.title, 'release') }}
-        run: |
-          FOR_RELEASE=true
-          PR_TITLE=github.event.pull_request.title
+        env:
+          FOR_RELEASE: ${{ true }}
+          PR_TITLE: github.event.pull_request.title
       - name: Check if for Amplitude runtime
-        if: ${{ $FOR_RELEASE && contains($PR_TITLE, 'amplitude') }}
-        run: |
-          RUNTIME=Amplitude
-          echo This is for Amplitude runtime
+        if: ${{ $FOR_RELEASE  == 1 && contains($PR_TITLE, 'amplitude) }}
+        env:
+          RELEASE_RUNTIME: Amplitude
       - name: Check if for Pendulum runtime
-        if: ${{ $FOR_RELEASE && contains($PR_TITLE, 'pendulum') }}
-        run: |
-            RUNTIME=Pendulum
-            echo This is for Pendulum runtime
+        if: ${{ $FOR_RELEASE == 1 && contains($PR_TITLE, 'pendulum') }}
+        env:
+          RELEASE_RUNTIME: Pendulum
+      - name: Print the runtime
+        env:
+            echo This is for $RELEASE_RUNTIME runtime
 
 
