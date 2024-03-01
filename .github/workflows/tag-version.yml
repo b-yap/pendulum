@@ -16,7 +16,7 @@ jobs:
   check-for-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v2
       - name: Check if PR titles says it's for release
         if: ${{ contains(github.event.pull_request.title, 'release') }}
         run: |
