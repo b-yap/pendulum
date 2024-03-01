@@ -20,17 +20,17 @@ jobs:
       - name: Check if PR titles says it's for release
         if: ${{ contains(github.event.pull_request.title, 'release') }}
         run: |
-          echo "FOR_RELEASE=true" >> $GITHUB_ENV
-          echo "PR_TITLE=${{ github.event.pull_request.title }}" >> $GITHUB_ENV
+          FOR_RELEASE=1
+          PR_TITLE=${{ github.event.pull_request.title }}
 
       - name: Check if for Amplitude runtime
         if: ${{ $FOR_RELEASE == 1 && contains($PR_TITLE, 'amplitude') }}
         run: |
-          echo "RELEASE_RUNTIME=amplitude" >> $GITHUB_ENV
+          RELEASE_RUNTIME=amplitude
       - name: Check if for Pendulum runtime
         if: ${{ $FOR_RELEASE == 1 && contains($PR_TITLE, 'pendulum') }}
         run: |
-          echo "RELEASE_RUNTIME=Pendulum" >> $GITHUB_ENV
+          RELEASE_RUNTIME=pendulum
       - name: Print the runtime
         run: |
             echo This is for $RELEASE_RUNTIME runtime
