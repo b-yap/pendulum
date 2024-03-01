@@ -29,10 +29,10 @@ jobs:
           echo "RELEASE_RUNTIME=amplitude" >> $GITHUB_ENV
       - name: Check if for Pendulum runtime
         if: ${{ $FOR_RELEASE == 1 && contains($PR_TITLE, 'pendulum') }}
-        env:
-          RELEASE_RUNTIME: Pendulum
+        run: |
+          echo "RELEASE_RUNTIME=Pendulum" >> $GITHUB_ENV
       - name: Print the runtime
-        env:
+        run: |
             echo This is for $RELEASE_RUNTIME runtime
 
 
