@@ -1,18 +1,34 @@
 name: "Release"
 
-on: # yamllint disable-line rule:truthy
+on:
+#  push:
+#    branches:
+#      - main
+#  pull_request:
+#    branches:
+#      - main
   push:
-    tags:
-      - "**"
+  pull_request:
+    types: [opened, synchronize]
 
 jobs:
-  release:
-    name: "Release"
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v3
+    - name: Check if PR titles says it's for release
+      if: ${{ contains(github.event.pull_request.title, 'release') }}
+      run: |
+        FOR_RELEASE=true
+        PR_TITLE=github.event.pull_request.title
+    - name: Check if for Amplitude runtime
+      if: ${{ contains($PR_TITLE, 'amplitude') }}
+      run: |
+        RUNTIME=Amplitude
+        echo This is for Amplitude runtime
+    - name: Check if for Pendulum runtime
+      if: ${{ contains($PR_TITLE, 'pendulum') }}
+      run: |
+          RUNTIME=Pendulum
+          echo This is for Pendulum runtime
 
-    runs-on: "ubuntu-latest"
 
-    steps:
-      - name: "Create release"
-        uses: "ergebnis/.github/actions/github/release/create@1.8.0"
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
