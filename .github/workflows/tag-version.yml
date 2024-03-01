@@ -9,7 +9,8 @@ on:
 #      - main
 #  push:
   pull_request:
-    types: [opened, synchronize]
+    branches:
+      - main
 
 jobs:
   runs-on: ubuntu-latest
