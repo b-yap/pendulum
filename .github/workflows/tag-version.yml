@@ -24,15 +24,15 @@ jobs:
           echo "PR_TITLE=${{ github.event.pull_request.title }}" >> $GITHUB_ENV
 
       - name: Check if for Amplitude runtime
-        if: ${{ env.FOR_RELEASE == 1 && contains(env.PR_TITLE, 'amplitude') }}
+        if: ${{ env.FOR_RELEASE == 1 && contains(env.PR_TITLE, 'Amplitude') }}
         run: |
           echo "RELEASE_RUNTIME=amplitude" >> $GITHUB_ENV
       - name: Check if for Pendulum runtime
-        if: ${{ env.FOR_RELEASE == 1 && contains(env.PR_TITLE, 'pendulum') }}
+        if: ${{ env.FOR_RELEASE == 1 && contains(env.PR_TITLE, 'Pendulum') }}
         run: |
           echo "RELEASE_RUNTIME=pendulum" >> $GITHUB_ENV
       - name: Print the runtime
         run: |
-            echo This is for $RELEASE_RUNTIME runtime
+            echo This is for ${{ env.RELEASE_RUNTIME }} runtime
 
 
