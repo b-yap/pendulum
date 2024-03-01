@@ -13,23 +13,24 @@ on:
       - main
 
 jobs:
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v3
-    - name: Check if PR titles says it's for release
-      if: ${{ contains(github.event.pull_request.title, 'release') }}
-      run: |
-        FOR_RELEASE=true
-        PR_TITLE=github.event.pull_request.title
-    - name: Check if for Amplitude runtime
-      if: ${{ $FOR_RELEASE && contains($PR_TITLE, 'amplitude') }}
-      run: |
-        RUNTIME=Amplitude
-        echo This is for Amplitude runtime
-    - name: Check if for Pendulum runtime
-      if: ${{ $FOR_RELEASE && contains($PR_TITLE, 'pendulum') }}
-      run: |
-          RUNTIME=Pendulum
-          echo This is for Pendulum runtime
+  check-for-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Check if PR titles says it's for release
+        if: ${{ contains(github.event.pull_request.title, 'release') }}
+        run: |
+          FOR_RELEASE=true
+          PR_TITLE=github.event.pull_request.title
+      - name: Check if for Amplitude runtime
+        if: ${{ $FOR_RELEASE && contains($PR_TITLE, 'amplitude') }}
+        run: |
+          RUNTIME=Amplitude
+          echo This is for Amplitude runtime
+      - name: Check if for Pendulum runtime
+        if: ${{ $FOR_RELEASE && contains($PR_TITLE, 'pendulum') }}
+        run: |
+            RUNTIME=Pendulum
+            echo This is for Pendulum runtime
 
 
