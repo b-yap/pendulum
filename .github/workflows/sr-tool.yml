@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        chain: [ "pendulum", "amplitude" ]
+        chain: [ "amplitude","pendulum" ]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -23,7 +23,7 @@ jobs:
         uses: chevdor/srtool-actions@v0.8.0
         with:
           chain: ${{ matrix.chain }}
-          runtime_dir: runtime/${{ matrix.chain }}-runtime
+          runtime_dir: runtime/${{ matrix.chain }}
       - name: Summary
         run: |
           echo '${{ steps.srtool_build.outputs.json }}' | jq > ${{ matrix.chain }}-srtool-digest.json
