@@ -16,11 +16,10 @@ jobs:
         chain: [ "amplitude","pendulum" ]
     steps:
       - uses: actions/checkout@v3
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           fetch-depth: 0
-      - name: Install toolchain
-        # Call `rustup show` as a hack so that the toolchain defined in rust-toolchain.toml.toml is installed
-        run: rustup show
+
 
       - name: Srtool build
         id: srtool_build
