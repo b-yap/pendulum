@@ -19,8 +19,8 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install toolchain
-        # Call `rustup show` as a hack so that the toolchain defined in rust-toolchain.toml is installed
-        run: rustup install nightly-2022-12-12
+        # Call `rustup show` as a hack so that the toolchain defined in rust-toolchain.toml.toml is installed
+        run: rustup show
 
       - name: Srtool build
         id: srtool_build
