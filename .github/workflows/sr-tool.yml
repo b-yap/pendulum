@@ -23,7 +23,7 @@ jobs:
         uses: chevdor/srtool-actions@v0.8.0
         with:
           chain: ${{ matrix.chain }}
-          runtime_dir: target/release/wbuild/${{ matrix.chain }}-runtime
+          runtime_dir: runtime/${{ matrix.chain }}-runtime
       - name: Summary
         run: |
           echo '${{ steps.srtool_build.outputs.json }}' | jq > ${{ matrix.chain }}-srtool-digest.json
