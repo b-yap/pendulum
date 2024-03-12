@@ -19,7 +19,7 @@ jobs:
       matrix:
         chain: ["amplitude", "pendulum"]
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.title, "Release:")
+    if: "contains(github.event.pull_request.title, 'Release:')"
     steps:
       - uses: actions/checkout@v4
         with:
