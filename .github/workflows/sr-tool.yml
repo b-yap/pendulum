@@ -14,12 +14,12 @@ on:
 jobs:
   build:
     name: Build ${{ matrix.chain }} ${{ github.event.inputs.ref }}
-    if: contains(github.event.pull_request.title, "Release:")
     strategy:
       fail-fast: false
       matrix:
         chain: ["amplitude", "pendulum"]
     runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.title, "Release:")
     steps:
       - uses: actions/checkout@v4
         with:
