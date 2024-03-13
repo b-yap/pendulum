@@ -5,21 +5,19 @@ env:
 
 on:
   pull_request:
-    branches:
-      - main
-  push:
+    types: [opened, edited, synchronize]
     branches:
       - main
 
 jobs:
   build:
-    if: "contains(github.event.pull_request.title, 'Release')"
     name: Build ${{ matrix.chain }} ${{ github.event.inputs.ref }}
     strategy:
       fail-fast: false
       matrix:
         chain: ["amplitude", "pendulum"]
     runs-on: ubuntu-latest
+    if: ${{ contains(github.event.pull_request.title, 'release:') && contains(github.event.pull_request.title, matrix.chain) }}
     steps:
       - uses: actions/checkout@v4
         with:
