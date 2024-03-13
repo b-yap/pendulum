@@ -11,13 +11,22 @@ on:
 
 jobs:
   build:
+    if: "contains(github.event.pull_request.title, 'release:')"
     name: Build ${{ matrix.chain }} ${{ github.event.inputs.ref }}
     strategy:
       fail-fast: false
       matrix:
         chain: ["amplitude", "pendulum"]
+        shouldReleaseAmp:
+          - "contains(github.event.pull_request.title, 'amplitude')"
+        shouldReleasePen:
+          - "contains(github.event.pull_request.title, 'pendulum')"
+        exclude:
+          - shouldReleaseAmp: false
+            chain: "amplitude"
+          - shouldReleasePen: false
+            chain: "pendulum"
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.title, 'release:') && contains(github.event.pull_request.title, matrix.chain)
     steps:
       - uses: actions/checkout@v4
         with:
