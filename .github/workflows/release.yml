@@ -5,11 +5,7 @@ env:
 
 on:
   pull_request:
-    types:
-      - closed
-      - opened
-      - edited
-      - synchronize
+    types: [opened, edited, synchronize]
     branches:
       - 'main'
 
