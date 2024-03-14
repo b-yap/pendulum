@@ -14,9 +14,6 @@ jobs:
 #    if: ${{ github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'release:') }}
     if: ${{ contains(github.event.pull_request.title, 'release:') }}
     name: SrTool check on ${{ matrix.chain }} ${{ github.event.inputs.ref }}
-    outputs:
-      releaseAmp: ${{ shouldReleaseAmp }}
-      releasePen: ${{ shouldReleasePen }}
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +27,9 @@ jobs:
             chain: "amplitude"
           - shouldReleasePen: false
             chain: "pendulum"
+    outputs:
+      releaseAmp: ${{ matrix.shouldReleaseAmp }}
+      releasePen: ${{ matrix.shouldReleasePen }}
     runs-on: ubuntu-latest
 
     steps:
