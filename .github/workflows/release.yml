@@ -11,7 +11,8 @@ on:
 
 jobs:
   srtool:
-    if: ${{ github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'release:') }}
+#    if: ${{ github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'release:') }}
+    if: ${{ contains(github.event.pull_request.title, 'release:') }}
     name: Build ${{ matrix.chain }} ${{ github.event.inputs.ref }}
     strategy:
       fail-fast: false
