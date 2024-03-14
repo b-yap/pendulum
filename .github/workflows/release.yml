@@ -13,7 +13,7 @@ jobs:
   srtool:
 #    if: ${{ github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'release:') }}
     if: ${{ contains(github.event.pull_request.title, 'release:') }}
-    name: Build ${{ matrix.chain }} ${{ github.event.inputs.ref }}
+    name: SrTool check on ${{ matrix.chain }} ${{ github.event.inputs.ref }}
     strategy:
       fail-fast: false
       matrix:
@@ -29,7 +29,8 @@ jobs:
             chain: "pendulum"
     runs-on: ubuntu-latest
     outputs:
-      chain: ${{ matrix.chain }}
+      releaseAmp: ${{ shouldReleaseAmp }}
+      releasePen: ${{ shouldReleasePen }}
 
     steps:
       - uses: actions/checkout@v4
@@ -147,8 +148,15 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install ${{ needs.srtool.outputs.chain }}
-        run: cargo build -p ${{ needs.srtool.outputs.chain }}-runtime --release
+      - name: Install Amplitude
+        if: ${{ needs.srtool.outputs.releaseAmp == true }}
+        run: cargo build -p amplitude-runtime --release
+
+      - name: Install Pendulum
+        if: ${{ needs.srtool.outputs.releasePen == true }}
+        run: cargo build -p pendulum-runtime --release
+
+
 
 
 
