@@ -16,16 +16,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        chain: ["amplitude", "pendulum"]
+        chain: ["amplitude", "pendulum", "foucoco"]
         shouldReleaseAmp:
           - ${{ contains(github.event.pull_request.title, 'amplitude') }}
         shouldReleasePen:
           - ${{ contains(github.event.pull_request.title, 'pendulum') }}
+        shouldReleaseFou:
+          - ${{ contains(github.event.pull_request.title, 'foucoco') }}
         exclude:
           - shouldReleaseAmp: false
             chain: "amplitude"
           - shouldReleasePen: false
             chain: "pendulum"
+          - shouldReleaseFou: false
+            chain: "foucoco"
     outputs:
       releaseAmp: ${{ matrix.shouldReleaseAmp }}
       releasePen: ${{ matrix.shouldReleasePen }}
@@ -47,9 +51,7 @@ jobs:
           tag: 1.66.1
       - name: Summary
         run: |
-          echo '${{ steps.srtool_build.outputs.json }}' | jq > ${{ matrix.chain }}-srtool-digest.json
-          cat ${{ matrix.chain }}-srtool-digest.json
-          echo "Runtime location: ${{ steps.srtool_build.outputs.wasm }}"
+          echo '${{ steps.srtool_build.outputs.json }}'
 
       # it takes a while to build the runtime, so let's save the artifact as soon as we have it
       - name: Archive Artifacts for ${{ matrix.chain }}
@@ -81,7 +83,7 @@ jobs:
       - name: Archive Subwasm results
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.chain }}-runtime-${{ github.sha }}
+          name: ${{ matrix.chain }}-runtime
           path: |
             ${{ matrix.chain }}-info.json
             ${{ matrix.chain }}-info_compressed.json
