@@ -381,7 +381,9 @@ impl AutomationPalletConfig for AutomationPalletConfigPendulum {
 
 	fn callback(_length: u8, _data: [u8; 32], _amount: u128) -> Result<(), XcmError> {
 		// TODO change to call the actual automation pallet, with data and length
-		System::remark_with_event(RuntimeOrigin::signed(AccountId::from([0; 32])), [0; 1].to_vec());
+		if let Err(e) = System::remark_with_event(RuntimeOrigin::signed(AccountId::from([0; 32])), [0; 1].to_vec()) {
+			log::warn!("callback(): {e:?}");
+		}
 		Ok(())
 	}
 }

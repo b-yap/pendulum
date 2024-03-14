@@ -1,4 +1,3 @@
-#![deny(warnings)]
 #![cfg_attr(test, feature(proc_macro_hygiene))]
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -41,8 +40,6 @@ use sp_runtime::{
 	ArithmeticError, FixedPointNumber, FixedU128,
 };
 use sp_std::{fmt::Debug, marker::PhantomData, vec::Vec};
-
-pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
