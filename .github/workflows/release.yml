@@ -149,11 +149,11 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Amplitude
-        if: ${{ needs.srtool.outputs.releaseAmp == true }}
+        if: ${{ needs.srtool.outputs.releaseAmp = true }}
         run: cargo build -p amplitude-runtime --release
 
       - name: Install Pendulum
-        if: ${{ needs.srtool.outputs.releasePen == true }}
+        if: ${{ needs.srtool.outputs.releasePen = true }}
         run: cargo build -p pendulum-runtime --release
 
 
