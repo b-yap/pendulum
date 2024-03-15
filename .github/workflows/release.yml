@@ -52,15 +52,30 @@ jobs:
       - name: Summary
         run: |
           echo '${{ steps.srtool_build.outputs.json }}'
-
+      - name: get spec version
+        id: spec_version
+        uses: notiz-dev/github-action-json-property@release
+        with:
+          path: '${{ steps.srtool_build.outputs.json }}'
+          prop_path: 'runtimes/compressed/subwasm/core_version/specVersion'
+      - name: get code hash
+        id: code_hash
+        uses: notiz-dev/github-action-json-property@release
+        with:
+          path: '${{ steps.srtool_build.outputs.json }}'
+          prop_path: 'runtimes/compressed/blake2_256'
+      - name: display version and code hash
+        run: |
+          echo 'spec version: ${{steps.spec_version.outputs.prop}}'
+          echo 'code hash: ${{steps.code_hash.outputs.prop}}'
       # it takes a while to build the runtime, so let's save the artifact as soon as we have it
       - name: Archive Artifacts for ${{ matrix.chain }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.chain }}-runtime
           path: |
-            ${{ steps.srtool_build.outputs.wasm }}
-            ${{ steps.srtool_build.outputs.wasm_compressed }}
+            ${{ steps.srtool_build.outputs.wasm }}/runtime/${{ matrix.chain }}/target/srtool/release/wbuild/${{ matrix.chain }}-runtime/${{ matrix.chain }}_runtime.compact.wasm
+            ${{ steps.srtool_build.outputs.wasm_compressed }}/runtime/${{ matrix.chain }}/target/srtool/release/wbuild/${{ matrix.chain }}-runtime/${{ matrix.chain }}_runtime.compact.compressed.wasm
             ${{ matrix.chain }}-srtool-digest.json
 
       # We now get extra information thanks to subwasm,
@@ -83,7 +98,7 @@ jobs:
       - name: Archive Subwasm results
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.chain }}-runtime
+          name: ${{ matrix.chain }}-runtime-${{ github.sha }}
           path: |
             ${{ matrix.chain }}-info.json
             ${{ matrix.chain }}-info_compressed.json
