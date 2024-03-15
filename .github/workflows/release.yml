@@ -52,22 +52,17 @@ jobs:
       - name: Summary
         run: |
           echo '${{ steps.srtool_build.outputs.json }}'
-      - name: get spec version
-        id: spec_version
-        uses: notiz-dev/github-action-json-property@release
+      - name: JSON to variables
+        uses: antifree/json-to-variables@v1.0.1
         with:
-          path: '${{ steps.srtool_build.outputs.json }}'
-          prop_path: 'runtimes/compressed/subwasm/core_version/specVersion'
-      - name: get code hash
-        id: code_hash
-        uses: notiz-dev/github-action-json-property@release
-        with:
-          path: '${{ steps.srtool_build.outputs.json }}'
-          prop_path: 'runtimes/compressed/blake2_256'
-      - name: display version and code hash
+          filename: '${{ steps.srtool_build.outputs.json }}'
+          prefix: 'digest'
+      - name: Spec version
         run: |
-          echo 'spec version: ${{steps.spec_version.outputs.prop}}'
-          echo 'code hash: ${{steps.code_hash.outputs.prop}}'
+          echo "Spec Version: ${{ env.digest_runtimes_compressed_subwasm_core_version_specVersion }}"
+      - name: Code hash
+        run: |
+          echo "Code Hash: ${{ env.digest_runtimes_compressed_blake2_256 }}"
       # it takes a while to build the runtime, so let's save the artifact as soon as we have it
       - name: Archive Artifacts for ${{ matrix.chain }}
         uses: actions/upload-artifact@v4
