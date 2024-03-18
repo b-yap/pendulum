@@ -9,7 +9,6 @@ on:
 
 jobs:
   javascript:
-    if: ${{ github.event.workflow_run.status == 'success' }}
     name: Run script to upgrade the parachain and upload this preimage
     strategy:
       matrix:
@@ -27,7 +26,19 @@ jobs:
         with:
           workflow: release.yml
           run_id: ${{ github.event.workflow_run.id }}
-          name: ${{ matrix.chain }}_runtime.compact.compressed.wasm
+          name: ${{ matrix.chain }}-runtime.zip
+
+      - name: unzip artifact
+        run: |
+          rm -r ${{ matrix.chain }}-runtime
+          filename=$(basename -s .zip *.zip)
+          echo "filename: " filename
+          unzip *.zip
+          rm *.zip
+          mv $filename temp
+          mv temp/out/* .
+          rm -r temp
+
 
       - name: run script
         uses: actions/setup-node@v4

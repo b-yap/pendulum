@@ -61,7 +61,7 @@ jobs:
       - name: Archive Artifacts for ${{ matrix.chain }}
         uses: actions/upload-artifact@v4
         with:
-          compression-level: 0
+          name: ${{ matrix.chain }}-runtime
           path: |
             ${{ matrix.chain }}_runtime.compact.wasm
             ${{ matrix.chain }}_runtime.compact.compressed.wasm
