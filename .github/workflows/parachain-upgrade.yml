@@ -1,6 +1,10 @@
 name: Parachain Upgrade
 
 on:
+  pull_request:
+    types: [ opened, edited, synchronize ]
+    branches:
+      - 'main'
   workflow_run:
     workflows:
       - Release
