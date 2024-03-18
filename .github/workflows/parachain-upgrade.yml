@@ -11,7 +11,7 @@ on:
 
 jobs:
   javascript:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.status == 'success' }}
     name: Run script to upgrade the parachain and upload this preimage
     strategy:
       matrix:
