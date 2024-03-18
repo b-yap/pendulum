@@ -10,8 +10,8 @@ on:
       - 'main'
 
 jobs:
-  if: ${{ github.event.workflow_run.conclusion == 'success' }}
   name: Run script to upgrade the parachain and upload this preimage
+  if: ${{ github.event.workflow_run.conclusion == 'success' }}
   strategy:
     matrix:
       chain: ["amplitude", "pendulum"]
