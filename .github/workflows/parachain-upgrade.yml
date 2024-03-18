@@ -1,0 +1,40 @@
+name: parachain upgrade
+
+on:
+  workflow_run:
+    workflows:
+      - Release
+    types:
+      - completed
+    branches:
+      - 'main'
+
+jobs:
+  if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  name: Run script to upgrade the parachain and upload this preimage
+  strategy:
+    matrix:
+      chain: ["amplitude", "pendulum"]
+  runs-on: ubuntu-latest
+
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.ref }}
+        fetch-depth: 0
+
+    - name: Download artifact
+      uses: dawidd6/action-download-artifact@v3
+      with:
+        workflow: release.yml
+        run_id: ${{ github.event.workflow_run.id }}
+        name: ${{ matrix.chain }}_runtime.compact.compressed.wasm
+
+    - name: run script
+      uses: actions/setup-node@v4
+      with:
+        node-version: '21.x'
+    - run: npm install
+    - run: |
+        node --version
+        node .github/scripts/parachain_upgrade_add_preimage.js ${{ matrix.chain }} ${{ matrix.chain }}_runtime.compact.compressed.wasm

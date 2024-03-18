@@ -57,22 +57,10 @@ jobs:
           echo '${{ steps.srtool_build.outputs.json }}'
           cp ${{ steps.srtool_build.outputs.wasm }} ${{ matrix.chain }}_runtime.compact.wasm
           cp ${{ steps.srtool_build.outputs.wasm_compressed }} ${{ matrix.chain }}_runtime.compact.compressed.wasm
-      - name: JSON to variables
-        uses: antifree/json-to-variables@v1.0.1
-        with:
-          filename: '${{ matrix.chain }}-srtool-digest.json'
-          prefix: 'digest'
-      - name: Spec version
-        run: |
-          echo "Spec Version: ${{ env.digest_runtimes_compressed_subwasm_core_version_specVersion }}"
-      - name: Code hash
-        run: |
-          echo "Code Hash: ${{ env.digest_runtimes_compressed_blake2_256 }}"
       # it takes a while to build the runtime, so let's save the artifact as soon as we have it
       - name: Archive Artifacts for ${{ matrix.chain }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.chain }}-runtime
           path: |
             ${{ matrix.chain }}_runtime.compact.wasm
             ${{ matrix.chain }}_runtime.compact.compressed.wasm
@@ -86,7 +74,6 @@ jobs:
           subwasm --version
       - name: Show Runtime information
         run: |
-          subwasm info ${{ steps.srtool_build.outputs.wasm }}
           subwasm info ${{ steps.srtool_build.outputs.wasm_compressed }}
           subwasm --json info ${{ steps.srtool_build.outputs.wasm }} > ${{ matrix.chain }}-info.json
           subwasm --json info ${{ steps.srtool_build.outputs.wasm_compressed }} > ${{ matrix.chain }}-info_compressed.json
