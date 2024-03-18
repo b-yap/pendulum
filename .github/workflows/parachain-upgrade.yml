@@ -1,4 +1,4 @@
-name: parachain upgrade
+name: Parachain Upgrade
 
 on:
   workflow_run:
