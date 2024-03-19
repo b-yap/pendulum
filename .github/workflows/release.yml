@@ -98,9 +98,16 @@ jobs:
     runs-on: "${{ needs.srtool.runs-on }}"
     strategy:
       matrix:
-        chain: ${{ needs.srtool.strategy.matrix.chain }}
+        chain: ["amplitude", "pendulum"]
+        shouldReleaseAmp:
+          - ${{ contains(github.event.pull_request.title, 'amplitude') }}
+        shouldReleasePen:
+          - ${{ contains(github.event.pull_request.title, 'pendulum') }}
         exclude:
-          chain: "foucoco"
+          - shouldReleaseAmp: false
+            chain: "amplitude"
+          - shouldReleasePen: false
+            chain: "pendulum"
 
     steps:
       - uses: actions/checkout@v4
