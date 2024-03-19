@@ -93,27 +93,31 @@ jobs:
             ${{ matrix.chain }}-diff.txt
 
   upgrade:
+    if: ${{ success() }}
     needs: srtool
-    matrix:
-      chain: ["amplitude", "pendulum"]
-      runs-on: ubuntu-latest
+    name: Perform runtime upgrade on ${{ matrix.chain }} ${{ github.event.inputs.ref }}
+    runs-on: "${{ needs.srtool.runs-on }}"
+    strategy:
+      matrix:
+        chain: ["amplitude", "pendulum"]
 
-      steps:
-        - uses: actions/checkout@v4
-          with:
-            ref: ${{ github.event.inputs.ref }}
-            fetch-depth: 0
+        steps:
+          - uses: actions/checkout@v4
+            with:
+              ref: ${{ github.event.inputs.ref }}
+              fetch-depth: 0
 
-        - name: copy file
-          run: |
-            cp ${{ needs.srtool.outputs.${{ matrix.chain }}-wasm }} compressed.wasm
-        - name: run script
-          uses: actions/setup-node@v4
-          with:
-            node-version: '21.x'
-        - run: npm install
-        - run: |
-            node --version
-            node .github/scripts/parachain_upgrade_add_preimage.js ${{ matrix.chain }} compressed.wasm
+          - name: copy file
+            run: |
+              cp ${{ needs.srtool.outputs.${{ matrix.chain }}-wasm }} compressed.wasm
+
+          - name: run script
+            uses: actions/setup-node@v4
+            with:
+              node-version: '21.x'
+            run: |
+              npm install
+              node --version
+              node .github/scripts/parachain_upgrade_add_preimage.js ${{ matrix.chain }} compressed.wasm
 
 
