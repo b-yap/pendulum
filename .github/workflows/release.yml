@@ -132,6 +132,6 @@ jobs:
       - name: run script
         run: |
           node --version
-          node parachain_upgrade.js ${{ matrix.chain }}_runtime.compact.compressed.wasm
+          node .github/scripts/js/parachain_upgrade.js ${{ matrix.chain }}_runtime.compact.compressed.wasm
 
 
