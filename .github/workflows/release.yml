@@ -111,10 +111,11 @@ jobs:
         run: |
           cp ${{ needs.srtool.outputs.${{ matrix.chain }}-wasm }} compressed.wasm
 
-      - name: run script
+      - name: prepare Node
         uses: actions/setup-node@v4
         with:
           node-version: '21.x'
+      - name: run script
         run: |
           npm install
           node --version
