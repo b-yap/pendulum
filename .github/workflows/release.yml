@@ -95,7 +95,7 @@ jobs:
     if: ${{ success() }}
     needs: srtool
     name: Perform runtime upgrade on ${{ matrix.chain }} ${{ github.event.inputs.ref }}
-    runs-on: ${{ needs.srtool.runs-on }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         chain: ["amplitude", "pendulum"]
