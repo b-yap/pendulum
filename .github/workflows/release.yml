@@ -30,8 +30,6 @@ jobs:
             chain: "pendulum"
           - shouldReleaseFou: false
             chain: "foucoco"
-    outputs:
-      ${{ matrix.chain }}-wasm: ${{ steps.srtool_build.outputs.wasm_compressed }}
     runs-on: ubuntu-latest
 
     steps:
@@ -56,6 +54,8 @@ jobs:
           echo '${{ steps.srtool_build.outputs.json }}'
           cp ${{ steps.srtool_build.outputs.wasm }} ${{ matrix.chain }}_runtime.compact.wasm
           cp ${{ steps.srtool_build.outputs.wasm_compressed }} ${{ matrix.chain }}_runtime.compact.compressed.wasm
+
+      - name:
       # it takes a while to build the runtime, so let's save the artifact as soon as we have it
       - name: Archive Artifacts for ${{ matrix.chain }}
         uses: actions/upload-artifact@v4
@@ -99,7 +99,7 @@ jobs:
     runs-on: "${{ needs.srtool.runs-on }}"
     strategy:
       matrix:
-        chain: ["amplitude", "pendulum"]
+        chain: ${{ needs.srtool.strategy.matrix }}"
 
     steps:
       - uses: actions/checkout@v4
@@ -107,9 +107,10 @@ jobs:
           ref: ${{ github.event.inputs.ref }}
           fetch-depth: 0
 
-      - name: copy file
-        run: |
-          cp ${{ needs.srtool.outputs.matrix.chain-wasm }} compressed.wasm
+      - name: download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.chain }}-runtime
 
       - name: prepare Node
         uses: actions/setup-node@v4
@@ -119,6 +120,6 @@ jobs:
         run: |
           npm install
           node --version
-          node .github/scripts/parachain_upgrade_add_preimage.js ${{ matrix.chain }} compressed.wasm
+          node .github/scripts/parachain_upgrade_add_preimage.js ${{ matrix.chain }}_runtime.compact.compressed.wasm
 
 
