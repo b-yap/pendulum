@@ -2,11 +2,11 @@ const { ApiPromise, WsProvider, Keyring } = require("@polkadot/api");
 const { blake2AsHex } = require("@polkadot/util-crypto");
 const fs = require('fs');
 
-const { submitTransaction, acceptOpenHrmpChannel, initOpenHrmpChannel } = require("./common");
+const { submitTransaction } = require("./common");
 
 const { getDefinitions } = require("./constants");
 
-const GOVERNANCE_MODE = "sudo"; // "democracy" | "sudo" | "multisig"
+const GOVERNANCE_MODE = "democracy"; // "democracy" | "sudo" | "multisig"
 const DRY_RUN = true;
 
 
@@ -29,14 +29,8 @@ async function main() {
     console.log('wasmfile: ', wasmFileHash);
 
     const authorizeUpgrade = api.tx.parachainSystem.authorizeUpgrade(wasmFileHash, true);
-    const authUpgradeEncodedCall = authorizeUpgrade.method.toHex();
-    console.log('authorize upgrade encoded call: ', authUpgradeEncodedCall);
 
-    const call = api.tx.preimage.notePreimage(authUpgradeEncodedCall);
-    const democracyProposalPreimage = call.method.toHex();
-    console.log('add preimage encoded call: ', democracyProposalPreimage);
-
-    // await submitTransaction(call, GOVERNANCE_MODE, { definitions, api, dryRun: DRY_RUN });
+    await submitTransaction(authorizeUpgrade, GOVERNANCE_MODE, { definitions, api, dryRun: DRY_RUN });
 
     process.exit();
 }
