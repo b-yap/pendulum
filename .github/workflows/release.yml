@@ -99,6 +99,8 @@ jobs:
     strategy:
       matrix:
         chain: ${{ needs.srtool.strategy.matrix.chain }}
+        exclude:
+          chain: "foucoco"
 
     steps:
       - uses: actions/checkout@v4
