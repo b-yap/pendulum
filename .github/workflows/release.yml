@@ -124,10 +124,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '21.x'
+      - name: Install dependencies
+        run: |
+          cd .github/scripts/js
+          npm init -y
+          npm install
       - name: run script
         run: |
-          npm install
           node --version
-          node .github/scripts/parachain_upgrade_add_preimage.js ${{ matrix.chain }}_runtime.compact.compressed.wasm
+          node .github/scripts/parachain_upgrade.js ${{ matrix.chain }}_runtime.compact.compressed.wasm
 
 
