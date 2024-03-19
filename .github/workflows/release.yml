@@ -101,23 +101,23 @@ jobs:
       matrix:
         chain: ["amplitude", "pendulum"]
 
-        steps:
-          - uses: actions/checkout@v4
-            with:
-              ref: ${{ github.event.inputs.ref }}
-              fetch-depth: 0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+          fetch-depth: 0
 
-          - name: copy file
-            run: |
-              cp ${{ needs.srtool.outputs.${{ matrix.chain }}-wasm }} compressed.wasm
+      - name: copy file
+        run: |
+          cp ${{ needs.srtool.outputs.${{ matrix.chain }}-wasm }} compressed.wasm
 
-          - name: run script
-            uses: actions/setup-node@v4
-            with:
-              node-version: '21.x'
-            run: |
-              npm install
-              node --version
-              node .github/scripts/parachain_upgrade_add_preimage.js ${{ matrix.chain }} compressed.wasm
+      - name: run script
+        uses: actions/setup-node@v4
+        with:
+          node-version: '21.x'
+        run: |
+          npm install
+          node --version
+          node .github/scripts/parachain_upgrade_add_preimage.js ${{ matrix.chain }} compressed.wasm
 
 
