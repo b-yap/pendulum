@@ -31,8 +31,7 @@ jobs:
           - shouldReleaseFou: false
             chain: "foucoco"
     outputs:
-      releaseAmp: ${{ matrix.shouldReleaseAmp }}
-      releasePen: ${{ matrix.shouldReleasePen }}
+      ${{ matrix.chain }}-wasm: ${{ steps.srtool_build.outputs.wasm_compressed }}
     runs-on: ubuntu-latest
 
     steps:
@@ -92,3 +91,29 @@ jobs:
             ${{ matrix.chain }}-info_compressed.json
             ${{ matrix.chain }}-metadata.json
             ${{ matrix.chain }}-diff.txt
+
+  upgrade:
+    needs: srtool
+    matrix:
+      chain: ["amplitude", "pendulum"]
+      runs-on: ubuntu-latest
+
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            ref: ${{ github.event.inputs.ref }}
+            fetch-depth: 0
+
+        - name: copy file
+          run: |
+            cp ${{ needs.srtool.outputs.${{ matrix.chain }}-wasm }} compressed.wasm
+        - name: run script
+          uses: actions/setup-node@v4
+          with:
+            node-version: '21.x'
+        - run: npm install
+        - run: |
+            node --version
+            node .github/scripts/parachain_upgrade_add_preimage.js ${{ matrix.chain }} compressed.wasm
+
+
