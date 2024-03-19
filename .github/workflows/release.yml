@@ -98,7 +98,7 @@ jobs:
     runs-on: "${{ needs.srtool.runs-on }}"
     strategy:
       matrix:
-        chain: ${{ needs.srtool.strategy.matrix }}
+        chain: ${{ needs.srtool.strategy.matrix.chain }}
 
     steps:
       - uses: actions/checkout@v4
