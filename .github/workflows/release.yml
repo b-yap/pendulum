@@ -53,14 +53,14 @@ jobs:
           echo "${{ format('${0}', steps.string.outputs.uppercase ) }}"
 
       - name: trigger gitlab
-        uses: eic/trigger-gitlab-ci@v1
+        uses: mb-wali/gitlab-cd-trigger@main
         with:
-          url: https://gitlab.com
-          project_id: 56492543
-          token: ${{ secrets.GITLABAPI }}
-          ref_name: main
-          variables: |
-            AMPLITUDE: Y
+          URL: 'https://gitlab.com'
+          GITLB_TRIGGER_TOKEN: ${{ secrets.GITLABAPI }}
+          PROJECT_ID: '56492543'
+          REF_NAME: 'main'
+          PIPELINE_VARIABLES: '{"AMPLITUDE":"Y"}'
+
 #      - name: Srtool build
 #        id: srtool_build
 #        uses: chevdor/srtool-actions@v0.9.2
