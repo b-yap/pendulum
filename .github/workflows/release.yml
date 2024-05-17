@@ -60,7 +60,7 @@ jobs:
           token: ${{ secrets.GITLABAPI }}
           ref_name: master
           variables: |
-            ${{ steps.string.outputs.uppercase }}: ${{ format('${0}', steps.string.outputs.uppercase ) }}
+            AMPLITUDE: ${{ format('${0}', steps.string.outputs.uppercase ) }}
 #      - name: Srtool build
 #        id: srtool_build
 #        uses: chevdor/srtool-actions@v0.9.2
