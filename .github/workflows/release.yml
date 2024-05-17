@@ -42,14 +42,25 @@ jobs:
         uses: ASzc/change-string-case-action@v6
         with:
           string: ${{ matrix.chain }}
+
       - name: Set environment variable
         id: set-env
         run: |
           echo "${{ steps.string.outputs.uppercase }}=Y" >> $GITHUB_ENV
+
       - name: Print environment variable
         run: |
           echo "${{ format('${0}', steps.string.outputs.uppercase ) }}"
 
+      - name: trigger gitlab
+        uses: eic/trigger-gitlab-ci@v1
+        with:
+          url: https://gitlab.com
+          project_id: 56492543
+          token: ${{ secrets.GITLABAPI }}
+          ref_name: master
+          variables: |
+            ${{ steps.string.outputs.uppercase }}: ${{ format('${0}', steps.string.outputs.uppercase ) }}
 #      - name: Srtool build
 #        id: srtool_build
 #        uses: chevdor/srtool-actions@v0.9.2
