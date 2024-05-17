@@ -45,10 +45,10 @@ jobs:
       - name: Set environment variable
         id: set-env
         run: |
-          echo "${{ steps.string.outputs.uppercase }}=\"Y\"" >> $GITHUB_ENV
+          echo "${{ steps.string.outputs.uppercase }}=Y" >> $GITHUB_ENV
       - name: Print environment variable
         run: |
-          echo "${{ format('$', ${{ steps.string.outputs.uppercase }} ) }}"
+          echo "${{ format('${0}', steps.string.outputs.uppercase ) }}"
 
 #      - name: Srtool build
 #        id: srtool_build
