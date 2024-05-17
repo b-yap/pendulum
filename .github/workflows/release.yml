@@ -58,9 +58,9 @@ jobs:
           url: https://gitlab.com
           project_id: 56492543
           token: ${{ secrets.GITLABAPI }}
-          ref_name: master
+          ref_name: main
           variables: |
-            AMPLITUDE: ${{ format('${0}', steps.string.outputs.uppercase ) }}
+            AMPLITUDE: Y
 #      - name: Srtool build
 #        id: srtool_build
 #        uses: chevdor/srtool-actions@v0.9.2
