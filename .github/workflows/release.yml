@@ -48,7 +48,7 @@ jobs:
           echo "${{ steps.string.outputs.uppercase }}=\"Y\"" >> $GITHUB_ENV
       - name: Print environment variable
         run: |
-          echo "${{ format('$', steps.string.outputs.uppercase) }}"
+          echo "${{ '${{ steps.string.outputs.uppercase }}' }}"
 
 #      - name: Srtool build
 #        id: srtool_build
