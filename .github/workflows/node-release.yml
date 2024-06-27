@@ -11,7 +11,7 @@ on:
 jobs:
   bump-version:
     runs-on: ubuntu-latest
-    if: ${{ contains(github.event.pull_request.title, 'release:') }}
+#    if: ${{ contains(github.event.pull_request.title, 'release:') }}
     name: bump version
     steps:
       - name: Checkout
