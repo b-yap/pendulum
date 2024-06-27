@@ -1,0 +1,41 @@
+name: Node Release
+
+on:
+  pull_request:
+    types:
+      closed
+    branches:
+      - 'main'
+
+jobs:
+  runs-on: ubuntu-latest
+  bump-version:
+    if: ${{ github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'release:') }}
+    name: bump version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: run cargo-bump
+        id: cargo-bump
+        uses: ./
+        with:
+          working-directory: ./node
+      - name: Verify Changed files
+        id: verify-changed-files
+        uses: tj-actions/verify-changed-files@v20
+        with:
+          files: |
+            node/**
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6.1.0
+        if: steps.verify-changed-files.outputs.files_changed == 'true'
+        with:
+          base: "main"
+          labels: "merge when passing"
+          title: "chore: upgrade node"
+          branch: "chore/upgrade-to-${{ steps.cargo-bump.outputs.new_version }}"
+          body: "View [CHANGES](https://github.com/${{ github.repository }}/compare/${{ steps.cargo-bump.outputs.old_version }}...${{ steps.cargo-bump.outputs.new_version }})"
+          token: ${{ secrets.PAT_TOKEN }}
+
