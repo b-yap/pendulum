@@ -3,14 +3,14 @@ name: Node Release
 on:
   pull_request:
     types:
-      closed
+      open
     branches:
       - 'main'
 
 jobs:
   runs-on: ubuntu-latest
   bump-version:
-    if: ${{ github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'release:') }}
+    if: ${{ contains(github.event.pull_request.title, 'release:') }}
     name: bump version
     steps:
       - name: Checkout
