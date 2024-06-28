@@ -1,4 +1,4 @@
-name: Release
+name: Runtime Release
 
 env:
   SUBWASM_VERSION: 0.20.0
