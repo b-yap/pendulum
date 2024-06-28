@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
       - name: run cargo-bump
         id: cargo-bump
-        uses: ./
+        uses: tj-actions/cargo-bump@v3
         with:
           working-directory: ./node
       - name: Verify Changed files
