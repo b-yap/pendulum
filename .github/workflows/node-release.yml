@@ -41,12 +41,10 @@ jobs:
           git push --set-upstream origin ${{ steps.branch-name.outputs.branch_name }}
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6.1.0
-        if: steps.verify-changed-files.outputs.files_changed == 'true'
         with:
           base: "main"
-          labels: "merge when passing"
           title: "release: upgrade node to ${{ steps.new-version.outputs.version }}"
           branch: "${{ steps.branch-name.outputs.branch-name }}"
           body: "View [CHANGES](https://github.com/${{ github.repository }}/compare/master...release/upgrade-node-to-${{ steps.new-version.outputs.version}})"
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
