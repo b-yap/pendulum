@@ -30,20 +30,23 @@ jobs:
         run: |
           cd /node
           echo "version=$( cargo metadata --format-version=1 --no-deps | jq '.packages[0].version' ) >> "$GITHUB_OUTPUT"
-          echo "branch_name=upgrade-node-to-${{version}}" >> "$GITHUB_OUTPUT"
           cd ..
+      - name: save branch name
+        id: branch-name
+        run: |
+          echo "branch_name=release/upgrade-node-to-${{ steps.new-version.outputs.version }}" >> "$GITHUB_OUTPUT"
       - name: checkout to new version
         run: |
-          git checkout -b release/${{ steps.new-version.outputs.branch-name}}
-          git push --set-upstream origin release/${{ steps.new-version.outputs.branch-name}}
+          git checkout -b ${{ steps.branch-name.outputs.branch_name }}
+          git push --set-upstream origin ${{ steps.branch-name.outputs.branch_name }}
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6.1.0
         if: steps.verify-changed-files.outputs.files_changed == 'true'
         with:
           base: "main"
           labels: "merge when passing"
-          title: "release: upgrade node to ${{ steps.new-version.outputs.version}}"
-          branch: "release/${{ steps.new-version.outputs.branch-name}}"
+          title: "release: upgrade node to ${{ steps.new-version.outputs.version }}"
+          branch: "${{ steps.branch-name.outputs.branch-name }}"
           body: "View [CHANGES](https://github.com/${{ github.repository }}/compare/master...release/upgrade-node-to-${{ steps.new-version.outputs.version}})"
           token: ${{ secrets.PAT_TOKEN }}
 
