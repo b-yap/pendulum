@@ -28,7 +28,7 @@ jobs:
       - name: save updated version
         id: new-version
         run: |
-          cd /node
+          cd node
           echo "version=$( cargo metadata --format-version=1 --no-deps | jq '.packages[0].version' ) >> "$GITHUB_OUTPUT"
           cd ..
       - name: save branch name
