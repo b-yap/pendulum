@@ -1,10 +1,9 @@
-use crate::*;
-use dia_oracle::dia;
+#![cfg_attr(not(feature = "std"), no_std)]
+#![allow(non_snake_case)]
+
 use scale_info::prelude::vec::Vec;
 use sp_core::{Decode, Encode, MaxEncodedLen};
-use sp_runtime::{codec, ArithmeticError, TokenError};
-
-pub use spacewalk_primitives::{Asset, CurrencyId};
+use sp_runtime::{codec, ArithmeticError, DispatchError, TokenError};
 
 /// Address is a type alias for easier readability of address (accountId) communicated between contract and chain extension.
 pub type Address = [u8; 32];
@@ -53,10 +52,6 @@ pub enum ChainExtensionOutcome {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
 pub enum ChainExtensionTokenError {
-	/// Funds are unavailable.
-	NoFunds,
-	/// Account that must exist would die.
-	WouldDie,
 	/// Account cannot exist with the funds that would be given.
 	BelowMinimum,
 	/// Account cannot be created.
@@ -67,6 +62,15 @@ pub enum ChainExtensionTokenError {
 	Frozen,
 	/// Operation is not supported by the asset.
 	Unsupported,
+	/// Funds are unavailable.
+	FundsUnavailable,
+	/// Some part of the balance gives the only provider reference to the account and thus cannot
+	/// be (re)moved.
+	OnlyProvider,
+	/// Account cannot be created for a held balance.
+	CannotCreateHold,
+	/// Withdrawal would cause unwanted loss of account.
+	NotExpendable,
 	/// Unknown error
 	Unknown,
 }
@@ -108,12 +112,14 @@ impl From<DispatchError> for ChainExtensionOutcome {
 impl From<TokenError> for ChainExtensionTokenError {
 	fn from(e: TokenError) -> Self {
 		match e {
-			TokenError::NoFunds => ChainExtensionTokenError::NoFunds,
-			TokenError::WouldDie => ChainExtensionTokenError::WouldDie,
 			TokenError::BelowMinimum => ChainExtensionTokenError::BelowMinimum,
 			TokenError::CannotCreate => ChainExtensionTokenError::CannotCreate,
 			TokenError::UnknownAsset => ChainExtensionTokenError::UnknownAsset,
 			TokenError::Frozen => ChainExtensionTokenError::Frozen,
+			TokenError::FundsUnavailable => ChainExtensionTokenError::FundsUnavailable,
+			TokenError::OnlyProvider => ChainExtensionTokenError::OnlyProvider,
+			TokenError::CannotCreateHold => ChainExtensionTokenError::CannotCreateHold,
+			TokenError::NotExpendable => ChainExtensionTokenError::NotExpendable,
 			TokenError::Unsupported => ChainExtensionTokenError::Unsupported,
 		}
 	}
@@ -152,30 +158,6 @@ fn trim_trailing_zeros(slice: &[u8]) -> &[u8] {
 	&slice[..slice.len() - trim_amount]
 }
 
-/// CoinInfo is almost the same as Dia's CoinInfo, but with Encode, Decode, and TypeInfo which are necessary for contract to chain extension communication. Implements From<dia::CoinInfo> to make conversion.
-#[derive(Debug, Clone, PartialEq, Eq, codec::Encode, codec::Decode)]
-#[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
-pub struct CoinInfo {
-	pub symbol: Vec<u8>,
-	pub name: Vec<u8>,
-	pub blockchain: Vec<u8>,
-	pub supply: u128,
-	pub last_update_timestamp: u64,
-	pub price: u128,
-}
-impl From<dia::CoinInfo> for CoinInfo {
-	fn from(coin_info: dia::CoinInfo) -> Self {
-		Self {
-			symbol: coin_info.symbol,
-			name: coin_info.name,
-			blockchain: coin_info.blockchain,
-			supply: coin_info.supply,
-			last_update_timestamp: coin_info.last_update_timestamp,
-			price: coin_info.price,
-		}
-	}
-}
-
 /// decode gets the slice from a Vec<u8> to decode it into its scale encoded type.
 pub fn decode<T: Decode>(input: Vec<u8>) -> Result<T, codec::Error> {
 	let mut input = input.as_slice();
@@ -206,13 +188,15 @@ impl ChainExtensionOutcome {
 impl ChainExtensionTokenError {
 	pub fn as_u32(&self) -> u32 {
 		match self {
-			ChainExtensionTokenError::NoFunds => 0,
-			ChainExtensionTokenError::WouldDie => 1,
-			ChainExtensionTokenError::BelowMinimum => 2,
-			ChainExtensionTokenError::CannotCreate => 3,
-			ChainExtensionTokenError::UnknownAsset => 4,
-			ChainExtensionTokenError::Frozen => 5,
-			ChainExtensionTokenError::Unsupported => 6,
+			ChainExtensionTokenError::BelowMinimum => 0,
+			ChainExtensionTokenError::CannotCreate => 1,
+			ChainExtensionTokenError::UnknownAsset => 2,
+			ChainExtensionTokenError::Frozen => 3,
+			ChainExtensionTokenError::Unsupported => 4,
+			ChainExtensionTokenError::FundsUnavailable => 5,
+			ChainExtensionTokenError::OnlyProvider => 6,
+			ChainExtensionTokenError::CannotCreateHold => 7,
+			ChainExtensionTokenError::NotExpendable => 8,
 			ChainExtensionTokenError::Unknown => 999,
 		}
 	}
@@ -261,13 +245,15 @@ impl TryFrom<u32> for ChainExtensionTokenError {
 
 	fn try_from(value: u32) -> Result<Self, Self::Error> {
 		match value {
-			0 => Ok(ChainExtensionTokenError::NoFunds),
-			1 => Ok(ChainExtensionTokenError::WouldDie),
-			2 => Ok(ChainExtensionTokenError::BelowMinimum),
-			3 => Ok(ChainExtensionTokenError::CannotCreate),
-			4 => Ok(ChainExtensionTokenError::UnknownAsset),
-			5 => Ok(ChainExtensionTokenError::Frozen),
-			6 => Ok(ChainExtensionTokenError::Unsupported),
+			0 => Ok(ChainExtensionTokenError::BelowMinimum),
+			1 => Ok(ChainExtensionTokenError::CannotCreate),
+			2 => Ok(ChainExtensionTokenError::UnknownAsset),
+			3 => Ok(ChainExtensionTokenError::Frozen),
+			4 => Ok(ChainExtensionTokenError::Unsupported),
+			5 => Ok(ChainExtensionTokenError::FundsUnavailable),
+			6 => Ok(ChainExtensionTokenError::OnlyProvider),
+			7 => Ok(ChainExtensionTokenError::CannotCreateHold),
+			8 => Ok(ChainExtensionTokenError::NotExpendable),
 			999 => Ok(ChainExtensionTokenError::Unknown),
 			_ => Err(DispatchError::Other("Invalid ChainExtensionTokenError value")),
 		}
