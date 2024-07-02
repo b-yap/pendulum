@@ -6,7 +6,8 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-mod assets;
+mod chain_ext;
+pub mod definitions;
 mod weights;
 pub mod xcm_config;
 pub mod zenlink;
@@ -19,7 +20,6 @@ pub use parachain_staking::InflationInfo;
 
 use bifrost_farming as farming;
 use bifrost_farming_rpc_runtime_api as farming_rpc_runtime_api;
-use orml_traits::MultiCurrency;
 
 use codec::Encode;
 
@@ -30,10 +30,9 @@ use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{
 		AccountIdConversion, AccountIdLookup, BlakeTwo256, Block as BlockT, Convert, ConvertInto,
-		One, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, DispatchError, FixedPointNumber, FixedU128, SaturatedConversion,
+	ApplyExtrinsicResult, DispatchError, FixedPointNumber, SaturatedConversion,
 };
 use sp_std::fmt::Debug;
 
@@ -63,14 +62,12 @@ use frame_system::{
 pub use sp_runtime::{MultiAddress, Perbill, Permill, Perquintill};
 
 use runtime_common::{
-	asset_registry, chain_ext, opaque, AccountId, Amount, AuraId, Balance, BlockNumber, Hash,
-	Index, PoolId, ReserveIdentifier, Signature, EXISTENTIAL_DEPOSIT, MILLIUNIT, NANOUNIT, UNIT,
+	asset_registry, opaque, AccountId, Amount, AuraId, Balance, BlockNumber, Hash, Index, PoolId,
+	ProxyType, ReserveIdentifier, Signature, EXISTENTIAL_DEPOSIT, MILLIUNIT, NANOUNIT, UNIT,
 };
 
 #[cfg(any(feature = "runtime-benchmarks", feature = "testing-utils"))]
 use oracle::testing_utils::MockDataFeeder;
-
-use oracle::OracleKey;
 
 use cumulus_pallet_parachain_system::RelayNumberStrictlyIncreases;
 
@@ -95,37 +92,26 @@ pub use stellar_relay::traits::{FieldLength, Organization, Validator};
 const CONTRACTS_DEBUG_OUTPUT: bool = true;
 
 use module_oracle_rpc_runtime_api::BalanceWrapper;
-use oracle::dia::{DiaOracleAdapter, XCMCurrencyConversion};
+use oracle::dia::DiaOracleAdapter;
 
 // Polkadot imports
 use polkadot_runtime_common::{BlockHashCount, SlowAdjustingFeeUpdate};
 
 use spacewalk_primitives::{
-	self as primitives, CurrencyId, CurrencyId::XCM, Moment, SignedFixedPoint, SignedInner,
+	self as primitives, Asset, CurrencyId, CurrencyId::XCM, Moment, SignedFixedPoint, SignedInner,
 	UnsignedFixedPoint, UnsignedInner,
 };
 
-use orml_currencies::WeightInfo;
 use weights::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight};
 
-use orml_currencies_allowance_extension::{
-	default_weights::WeightInfo as AllowanceWeightInfo, Config as AllowanceConfig,
-};
-
-use frame_support::{
-	log::{error, trace},
-	pallet_prelude::*,
-	traits::InstanceFilter,
-};
+use frame_support::traits::InstanceFilter;
 use sp_std::vec::Vec;
-
-use pallet_contracts::chain_extension::{
-	ChainExtension, Environment, Ext, InitState, RetVal, SysConfig,
-};
-use sp_core::crypto::UncheckedFrom;
 
 // XCM Imports
 use xcm_executor::XcmExecutor;
+
+// Chain Extension
+use crate::chain_ext::{PriceChainExtension, TokensChainExtension};
 
 pub type VaultId = primitives::VaultId<AccountId, CurrencyId>;
 
@@ -166,6 +152,33 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, RuntimeCall, Si
 
 pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 
+use crate::sp_api_hidden_includes_construct_runtime::hidden_include::dispatch::GetStorageVersion;
+use frame_support::pallet_prelude::StorageVersion;
+
+// Temporary struct that defines the executions to be done upon upgrade,
+// Should be removed or at least checked on each upgrade to see if it is relevant,
+// given that these are "one-time" executions for particular upgrades
+pub struct CustomOnRuntimeUpgrade;
+impl frame_support::traits::OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		let mut writes = 0;
+		// WARNING: manually setting the storage version
+		if Contracts::on_chain_storage_version() == 9 {
+			log::info!("Upgrading pallet contract's storage version to 10");
+			StorageVersion::new(10).put::<Contracts>();
+			writes += 1;
+		}
+
+		if AssetRegistry::on_chain_storage_version() == 0 {
+			log::info!("Upgrading pallet asset registry's storage version to 2");
+			StorageVersion::new(2).put::<AssetRegistry>();
+			writes += 1;
+		}
+
+		<Runtime as frame_system::Config>::DbWeight::get().reads_writes(2, writes)
+	}
+}
+
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
 	Runtime,
@@ -173,60 +186,12 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
+	(
+		CustomOnRuntimeUpgrade,
+		pallet_vesting::migrations::v1::ForceSetVersionToV1<Runtime>,
+		pallet_transaction_payment::migrations::v1::ForceSetVersionToV2<Runtime>,
+	),
 >;
-
-pub struct SpacewalkNativeCurrency;
-
-impl oracle::dia::NativeCurrencyKey for SpacewalkNativeCurrency {
-	fn native_symbol() -> Vec<u8> {
-		"AMPE".as_bytes().to_vec()
-	}
-
-	fn native_chain() -> Vec<u8> {
-		"Amplitude".as_bytes().to_vec()
-	}
-}
-
-impl XCMCurrencyConversion for SpacewalkNativeCurrency {
-	fn convert_to_dia_currency_id(token_symbol: u8) -> Option<(Vec<u8>, Vec<u8>)> {
-		match token_symbol {
-			0 => Some((b"Kusama".to_vec(), b"KSM".to_vec())),
-			_ => None,
-		}
-	}
-
-	fn convert_from_dia_currency_id(blockchain: Vec<u8>, symbol: Vec<u8>) -> Option<u8> {
-		match (blockchain.as_slice(), symbol.as_slice()) {
-			(b"Kusama", b"KSM") => Some(0),
-			_ => None,
-		}
-	}
-}
-
-cfg_if::cfg_if! {
-	if #[cfg(feature = "runtime-benchmarks")] {
-		use oracle::testing_utils::{
-			MockConvertMoment, MockConvertPrice, MockDiaOracle, MockOracleKeyConvertor,
-		};
-		type DataProviderImpl = DiaOracleAdapter<
-			MockDiaOracle,
-			UnsignedFixedPoint,
-			Moment,
-			MockOracleKeyConvertor,
-			MockConvertPrice,
-			MockConvertMoment<Moment>,
-		>;
-	} else {
-		type DataProviderImpl = DiaOracleAdapter<
-			DiaOracleModule,
-			UnsignedFixedPoint,
-			Moment,
-			oracle::dia::DiaOracleKeyConvertor<SpacewalkNativeCurrency>,
-			ConvertPrice,
-			ConvertMoment,
-		>;
-	}
-}
 
 pub struct ConvertPrice;
 
@@ -284,7 +249,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("foucoco"),
 	impl_name: create_runtime_str!("foucoco"),
 	authoring_version: 1,
-	spec_version: 10,
+	spec_version: 18,
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 8,
@@ -364,53 +329,53 @@ impl Contains<RuntimeCall> for BaseFilter {
 	fn contains(call: &RuntimeCall) -> bool {
 		match call {
 			// These modules are all allowed to be called by transactions:
-			RuntimeCall::Bounties(_) |
-			RuntimeCall::ChildBounties(_) |
-			RuntimeCall::ClientsInfo(_) |
-			RuntimeCall::Treasury(_) |
-			RuntimeCall::Tokens(_) |
-			RuntimeCall::Currencies(_) |
-			RuntimeCall::ParachainStaking(_) |
-			RuntimeCall::Democracy(_) |
-			RuntimeCall::Council(_) |
-			RuntimeCall::TechnicalCommittee(_) |
-			RuntimeCall::System(_) |
-			RuntimeCall::Scheduler(_) |
-			RuntimeCall::Preimage(_) |
-			RuntimeCall::Timestamp(_) |
-			RuntimeCall::Balances(_) |
-			RuntimeCall::Session(_) |
-			RuntimeCall::ParachainSystem(_) |
-			RuntimeCall::Sudo(_) |
-			RuntimeCall::XcmpQueue(_) |
-			RuntimeCall::PolkadotXcm(_) |
-			RuntimeCall::DmpQueue(_) |
-			RuntimeCall::Utility(_) |
-			RuntimeCall::Vesting(_) |
-			RuntimeCall::XTokens(_) |
-			RuntimeCall::Multisig(_) |
-			RuntimeCall::Identity(_) |
-			RuntimeCall::Contracts(_) |
-			RuntimeCall::ZenlinkProtocol(_) |
-			RuntimeCall::DiaOracleModule(_) |
-			RuntimeCall::Fee(_) |
-			RuntimeCall::Issue(_) |
-			RuntimeCall::Nomination(_) |
-			RuntimeCall::Oracle(_) |
-			RuntimeCall::Redeem(_) |
-			RuntimeCall::Replace(_) |
-			RuntimeCall::Security(_) |
-			RuntimeCall::StellarRelay(_) |
-			RuntimeCall::VaultRegistry(_) |
-			RuntimeCall::PooledVaultRewards(_) |
-			RuntimeCall::Farming(_) |
-			RuntimeCall::TokenAllowance(_) |
-			RuntimeCall::AssetRegistry(_) |
-			RuntimeCall::Proxy(_) |
-			RuntimeCall::OrmlExtension(_) |
-			RuntimeCall::TreasuryBuyoutExtension(_) |
-			RuntimeCall::RewardDistribution(_) => true, // All pallets are allowed, but exhaustive match is defensive
-			                                            // in the case of adding new pallets.
+			RuntimeCall::Bounties(_)
+			| RuntimeCall::ChildBounties(_)
+			| RuntimeCall::ClientsInfo(_)
+			| RuntimeCall::Treasury(_)
+			| RuntimeCall::Tokens(_)
+			| RuntimeCall::Currencies(_)
+			| RuntimeCall::ParachainStaking(_)
+			| RuntimeCall::Democracy(_)
+			| RuntimeCall::Council(_)
+			| RuntimeCall::TechnicalCommittee(_)
+			| RuntimeCall::System(_)
+			| RuntimeCall::Scheduler(_)
+			| RuntimeCall::Preimage(_)
+			| RuntimeCall::Timestamp(_)
+			| RuntimeCall::Balances(_)
+			| RuntimeCall::Session(_)
+			| RuntimeCall::ParachainSystem(_)
+			| RuntimeCall::Sudo(_)
+			| RuntimeCall::XcmpQueue(_)
+			| RuntimeCall::PolkadotXcm(_)
+			| RuntimeCall::DmpQueue(_)
+			| RuntimeCall::Utility(_)
+			| RuntimeCall::Vesting(_)
+			| RuntimeCall::XTokens(_)
+			| RuntimeCall::Multisig(_)
+			| RuntimeCall::Identity(_)
+			| RuntimeCall::Contracts(_)
+			| RuntimeCall::ZenlinkProtocol(_)
+			| RuntimeCall::DiaOracleModule(_)
+			| RuntimeCall::Fee(_)
+			| RuntimeCall::Issue(_)
+			| RuntimeCall::Nomination(_)
+			| RuntimeCall::Oracle(_)
+			| RuntimeCall::Redeem(_)
+			| RuntimeCall::Replace(_)
+			| RuntimeCall::Security(_)
+			| RuntimeCall::StellarRelay(_)
+			| RuntimeCall::VaultRegistry(_)
+			| RuntimeCall::PooledVaultRewards(_)
+			| RuntimeCall::Farming(_)
+			| RuntimeCall::TokenAllowance(_)
+			| RuntimeCall::AssetRegistry(_)
+			| RuntimeCall::Proxy(_)
+			| RuntimeCall::OrmlExtension(_)
+			| RuntimeCall::TreasuryBuyoutExtension(_)
+			| RuntimeCall::RewardDistribution(_) => true, // All pallets are allowed, but exhaustive match is defensive
+			                                              // in the case of adding new pallets.
 		}
 	}
 }
@@ -506,6 +471,10 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 	type MaxReserves = MaxReserves;
 	type ReserveIdentifier = ReserveIdentifier;
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type MaxHolds = ConstU32<1>;
+	type HoldIdentifier = RuntimeHoldReason;
 }
 
 parameter_types! {
@@ -667,6 +636,7 @@ parameter_types! {
 	pub const CouncilMotionDuration: BlockNumber = 3 * DAYS;
 	pub const CouncilMaxProposals: u32 = 100;
 	pub const CouncilMaxMembers: u32 = 100;
+	pub MaxProposalWeight: Weight = Perbill::from_percent(50) * RuntimeBlockWeights::get().max_block;
 }
 
 type CouncilCollective = pallet_collective::Instance1;
@@ -681,6 +651,7 @@ impl pallet_collective::Config<CouncilCollective> for Runtime {
 	type DefaultVote = pallet_collective::PrimeDefaultVote;
 	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
 	type SetMembersOrigin = EnsureRoot<AccountId>;
+	type MaxProposalWeight = MaxProposalWeight;
 }
 
 parameter_types! {
@@ -701,6 +672,7 @@ impl pallet_collective::Config<TechnicalCollective> for Runtime {
 	type DefaultVote = pallet_collective::PrimeDefaultVote;
 	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
 	type SetMembersOrigin = EnsureRoot<AccountId>;
+	type MaxProposalWeight = MaxProposalWeight;
 }
 
 parameter_types! {
@@ -930,7 +902,7 @@ impl parachain_staking::Config for Runtime {
 	type NetworkRewardStart = NetworkRewardStart;
 	type NetworkRewardBeneficiary = Treasury;
 	type CollatorRewardRateDecay = CollatorRewardRateDecay;
-	type WeightInfo = parachain_staking::default_weights::SubstrateWeight<Runtime>;
+	type WeightInfo = weights::parachain_staking::SubstrateWeight<Runtime>;
 
 	const BLOCKS_PER_YEAR: BlockNumber = BLOCKS_PER_YEAR;
 }
@@ -1003,67 +975,28 @@ parameter_types! {
 
 impl orml_tokens_management_extension::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = orml_tokens_management_extension::default_weights::SubstrateWeight<Runtime>;
+	type WeightInfo = weights::orml_tokens_management_extension::SubstrateWeight<Runtime>;
 	type CurrencyIdChecker = CurrencyIdCheckerImpl;
 	type DepositCurrency = DepositCurrency;
 	type AssetDeposit = AssetDeposit;
 }
 
-pub struct OraclePriceGetter(Oracle);
+pub struct DecimalsLookupImpl;
+impl spacewalk_primitives::DecimalsLookup for DecimalsLookupImpl {
+	type CurrencyId = CurrencyId;
 
-impl treasury_buyout_extension::PriceGetter<CurrencyId> for OraclePriceGetter {
-	#[cfg(not(feature = "runtime-benchmarks"))]
-	fn get_price<FixedNumber>(currency_id: CurrencyId) -> Result<FixedNumber, DispatchError>
-	where
-		FixedNumber: FixedPointNumber + One + Zero + Debug + TryFrom<FixedU128>,
-	{
-		let key = OracleKey::ExchangeRate(currency_id);
-		let asset_price = Oracle::get_price(key.clone())?;
-
-		let converted_asset_price = FixedNumber::try_from(asset_price);
-
-		match converted_asset_price {
-			Ok(price) => Ok(price),
-			Err(_) => Err(DispatchError::Other("Failed to convert price")),
-		}
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn get_price<FixedNumber>(currency_id: CurrencyId) -> Result<FixedNumber, DispatchError>
-	where
-		FixedNumber: FixedPointNumber + One + Zero + Debug + TryFrom<FixedU128>,
-	{
-		// Forcefully set chain status to running when benchmarking so that the oracle doesn't fail
-		Security::set_status(StatusCode::Running);
-
-		let key = OracleKey::ExchangeRate(currency_id);
-
-		// Attempt to get the price once and use the result to decide if feeding a value is necessary
-		match Oracle::get_price(key.clone()) {
-			Ok(asset_price) => {
-				// If the price is successfully retrieved, use it directly
-				let converted_asset_price = FixedNumber::try_from(asset_price)
-					.map_err(|_| DispatchError::Other("Failed to convert price"))?;
-				Ok(converted_asset_price)
-			},
-			Err(_) => {
-				// Price not found, feed the default value
-				let rate = FixedU128::checked_from_rational(100, 1).expect("This is a valid ratio");
-				// Account used for feeding values
-				let account = AccountId::from([0u8; 32]);
-				Oracle::feed_values(account, vec![(key.clone(), rate)])?;
-
-				// If feeding was successful, just use the feeded price to spare a read
-				let converted_asset_price = FixedNumber::try_from(rate)
-					.map_err(|_| DispatchError::Other("Failed to convert price"))?;
-				Ok(converted_asset_price)
-			},
+	fn decimals(currency_id: Self::CurrencyId) -> u32 {
+		// Fallback to hard-coded implementation in case no decimals are found in asset registry
+		match AssetRegistry::metadata(currency_id) {
+			Some(metadata) => metadata.decimals,
+			None => spacewalk_primitives::AmplitudeDecimalsLookup::decimals(currency_id),
 		}
 	}
 }
 
 parameter_types! {
 	pub const SellFee: Permill = Permill::from_percent(1);
-	pub const MinAmountToBuyout: Balance = NANOUNIT;
+	pub const MinAmountToBuyout: Balance = 100 * MILLIUNIT;
 	// 24 hours in blocks (where average block time is 12 seconds)
 	pub const BuyoutPeriod: u32 = 7200;
 	// Maximum number of allowed currencies for buyout
@@ -1076,10 +1009,11 @@ impl treasury_buyout_extension::Config for Runtime {
 	type TreasuryAccount = FoucocoTreasuryAccount;
 	type BuyoutPeriod = BuyoutPeriod;
 	type SellFee = SellFee;
-	type PriceGetter = OraclePriceGetter;
+	type PriceGetter = runtime_common::OraclePriceGetter<Runtime>;
+	type DecimalsLookup = DecimalsLookupImpl;
 	type MinAmountToBuyout = MinAmountToBuyout;
 	type MaxAllowedBuyoutCurrencies = MaxAllowedBuyoutCurrencies;
-	type WeightInfo = treasury_buyout_extension::default_weights::SubstrateWeight<Runtime>;
+	type WeightInfo = weights::treasury_buyout_extension::SubstrateWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type RelayChainCurrencyId = RelayChainCurrencyId;
 }
@@ -1091,12 +1025,7 @@ const fn deposit(items: u32, bytes: u32) -> Balance {
 parameter_types! {
 	pub const DepositPerItem: Balance = deposit(1, 0);
 	pub const DepositPerByte: Balance = deposit(0, 1);
-	pub const DeletionQueueDepth: u32 = 128;
-	pub DeletionWeightLimit: Weight = RuntimeBlockWeights::get()
-		.per_class
-		.get(DispatchClass::Normal)
-		.max_total
-		.unwrap_or(RuntimeBlockWeights::get().max_block);
+	pub const DefaultDepositLimit: Balance = deposit(1024, 1024 * 1024);
 	pub Schedule: pallet_contracts::Schedule<Runtime> = pallet_contracts::Schedule::<Runtime>{
 		limits: pallet_contracts::Limits{
 			parameters: 256,
@@ -1104,405 +1033,6 @@ parameter_types! {
 		},
 		..Default::default()
 	};
-}
-#[derive(Default)]
-pub struct Psp22Extension;
-
-use runtime_common::{chain_ext::*, ProxyType};
-
-pub(crate) type BalanceOfForChainExt<T> =
-	<<T as orml_currencies::Config>::MultiCurrency as orml_traits::MultiCurrency<
-		<T as frame_system::Config>::AccountId,
-	>>::Balance;
-
-// Enum that handles all supported function id options
-#[derive(Debug)]
-enum FuncId {
-	// totalSupply(currency)
-	TotalSupply,
-	// balanceOf(currency, account)
-	BalanceOf,
-	// transfer(currency, recipient, amount)
-	Transfer,
-	// allowance(currency, owner, spender)
-	Allowance,
-	// approve(currency, spender, amount)
-	Approve,
-	// transfer_from(sender, currency, recipient, amount)
-	TransferFrom,
-	// get_coin_info(blockchain, symbol)
-	GetCoinInfo,
-}
-
-impl TryFrom<u16> for FuncId {
-	type Error = DispatchError;
-	fn try_from(func_id: u16) -> Result<Self, Self::Error> {
-		let id = match func_id {
-			1101 => Self::TotalSupply,
-			1102 => Self::BalanceOf,
-			1103 => Self::Transfer,
-			1104 => Self::Allowance,
-			1105 => Self::Approve,
-			1106 => Self::TransferFrom,
-			1200 => Self::GetCoinInfo,
-			_ => {
-				error!("Called an unregistered `func_id`: {:}", func_id);
-				return Err(DispatchError::Other("Unimplemented func_id"))
-			},
-		};
-		Ok(id)
-	}
-}
-
-impl<T> ChainExtension<T> for Psp22Extension
-where
-	T: SysConfig
-		+ orml_tokens::Config<CurrencyId = CurrencyId>
-		+ pallet_contracts::Config
-		+ orml_currencies::Config<MultiCurrency = Tokens, AccountId = AccountId>
-		+ orml_currencies_allowance_extension::Config
-		+ dia_oracle::Config,
-	<T as SysConfig>::AccountId: UncheckedFrom<<T as SysConfig>::Hash> + AsRef<[u8]>,
-{
-	fn call<E: Ext>(&mut self, env: Environment<E, InitState>) -> Result<RetVal, DispatchError>
-	where
-		E: Ext<T = T>,
-		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
-	{
-		let func_id = FuncId::try_from(env.func_id())?;
-
-		trace!("Calling function with ID {:?} from Psp22Extension", &func_id);
-
-		// debug_message weight is a good approximation of the additional overhead of going
-		// from contract layer to substrate layer.
-		let overhead_weight = Weight::from_parts(
-			<T as pallet_contracts::Config>::Schedule::get()
-				.host_fn_weights
-				.debug_message
-				.ref_time(),
-			0,
-		);
-
-		let result = match func_id {
-			FuncId::TotalSupply => total_supply(env, overhead_weight),
-			FuncId::BalanceOf => balance_of(env, overhead_weight),
-			FuncId::Transfer => transfer(env, overhead_weight),
-			FuncId::Allowance => allowance(env, overhead_weight),
-			FuncId::Approve => approve(env, overhead_weight),
-			FuncId::TransferFrom => transfer_from(env, overhead_weight),
-			FuncId::GetCoinInfo => get_coin_info(env, overhead_weight),
-		};
-
-		result
-	}
-
-	fn enabled() -> bool {
-		true
-	}
-}
-
-fn total_supply<E: Ext, T>(
-	env: Environment<'_, '_, E, InitState>,
-	overhead_weight: Weight,
-) -> Result<RetVal, DispatchError>
-where
-	T: SysConfig
-		+ orml_tokens::Config<CurrencyId = CurrencyId>
-		+ pallet_contracts::Config
-		+ orml_currencies::Config<MultiCurrency = Tokens, AccountId = AccountId>
-		+ orml_currencies_allowance_extension::Config
-		+ dia_oracle::Config,
-	E: Ext<T = T>,
-{
-	let mut env = env.buf_in_buf_out();
-	let base_weight = <T as frame_system::Config>::DbWeight::get().reads(1);
-	env.charge_weight(base_weight.saturating_add(overhead_weight))?;
-	let input = env.read(256)?;
-
-	let currency_id: CurrencyId = match chain_ext::decode(input) {
-		Ok(value) => value,
-		Err(_) => return Ok(RetVal::Converging(ChainExtensionOutcome::DecodingError.as_u32())),
-	};
-
-	trace!("Calling totalSupply() for currency {:?}", currency_id);
-
-	if !orml_currencies_allowance_extension::Pallet::<T>::is_allowed_currency(currency_id) {
-		return Ok(RetVal::Converging(ChainExtensionTokenError::Unsupported.as_u32()))
-	}
-
-	let total_supply =
-		<orml_currencies::Pallet<T> as MultiCurrency<T::AccountId>>::total_issuance(currency_id);
-
-	if let Err(_) = env.write(&total_supply.encode(), false, None) {
-		return Ok(RetVal::Converging(ChainExtensionOutcome::WriteError.as_u32()))
-	};
-	return Ok(RetVal::Converging(ChainExtensionOutcome::Success.as_u32()))
-}
-
-fn balance_of<E: Ext, T>(
-	env: Environment<'_, '_, E, InitState>,
-	overhead_weight: Weight,
-) -> Result<RetVal, DispatchError>
-where
-	T: SysConfig
-		+ orml_tokens::Config<CurrencyId = CurrencyId>
-		+ pallet_contracts::Config
-		+ orml_currencies::Config<MultiCurrency = Tokens, AccountId = AccountId>
-		+ orml_currencies_allowance_extension::Config
-		+ dia_oracle::Config,
-	E: Ext<T = T>,
-{
-	let mut env = env.buf_in_buf_out();
-	let base_weight = <T as frame_system::Config>::DbWeight::get().reads(1);
-	env.charge_weight(base_weight.saturating_add(overhead_weight))?;
-	let input = env.read(256)?;
-	let (currency_id, account_id): (CurrencyId, T::AccountId) = match chain_ext::decode(input) {
-		Ok(value) => value,
-		Err(_) => return Ok(RetVal::Converging(ChainExtensionOutcome::DecodingError.as_u32())),
-	};
-
-	trace!("Calling balanceOf() for currency {:?} and account {:?}", currency_id, account_id);
-
-	if !orml_currencies_allowance_extension::Pallet::<T>::is_allowed_currency(currency_id) {
-		return Ok(RetVal::Converging(ChainExtensionTokenError::Unsupported.as_u32()))
-	}
-
-	let balance = <orml_currencies::Pallet<T> as MultiCurrency<T::AccountId>>::free_balance(
-		currency_id,
-		&account_id,
-	);
-
-	if let Err(_) = env.write(&balance.encode(), false, None) {
-		return Ok(RetVal::Converging(ChainExtensionOutcome::WriteError.as_u32()))
-	};
-	return Ok(RetVal::Converging(ChainExtensionOutcome::Success.as_u32()))
-}
-
-fn transfer<E: Ext, T>(
-	mut env: Environment<'_, '_, E, InitState>,
-	overhead_weight: Weight,
-) -> Result<RetVal, DispatchError>
-where
-	T: SysConfig
-		+ orml_tokens::Config<CurrencyId = CurrencyId>
-		+ pallet_contracts::Config
-		+ orml_currencies::Config<MultiCurrency = Tokens, AccountId = AccountId>
-		+ orml_currencies_allowance_extension::Config
-		+ dia_oracle::Config,
-	E: Ext<T = T>,
-{
-	let ext = env.ext();
-	let caller = ext.caller().clone();
-
-	let mut env = env.buf_in_buf_out();
-	// Here we use weights for non native currency as worst case scenario, since we can't know whether it's native or not until we've already read from contract env.
-	let base_weight = <T as orml_currencies::Config>::WeightInfo::transfer_non_native_currency();
-	env.charge_weight(base_weight.saturating_add(overhead_weight))?;
-	let input = env.read(256)?;
-	let (currency_id, recipient, amount): (CurrencyId, T::AccountId, BalanceOfForChainExt<T>) =
-		match chain_ext::decode(input) {
-			Ok(value) => value,
-			Err(_) => return Ok(RetVal::Converging(ChainExtensionOutcome::DecodingError.as_u32())),
-		};
-
-	trace!(
-		"Calling transfer() sending {:?} {:?}, from {:?} to {:?}",
-		amount,
-		currency_id,
-		caller,
-		recipient
-	);
-
-	if !orml_currencies_allowance_extension::Pallet::<T>::is_allowed_currency(currency_id) {
-		return Ok(RetVal::Converging(ChainExtensionTokenError::Unsupported.as_u32()))
-	}
-
-	<orml_currencies::Pallet<T> as MultiCurrency<T::AccountId>>::transfer(
-		currency_id,
-		&caller,
-		&recipient,
-		amount,
-	)?;
-	return Ok(RetVal::Converging(ChainExtensionOutcome::Success.as_u32()))
-}
-
-fn allowance<E: Ext, T>(
-	env: Environment<'_, '_, E, InitState>,
-	overhead_weight: Weight,
-) -> Result<RetVal, DispatchError>
-where
-	T: SysConfig
-		+ orml_tokens::Config<CurrencyId = CurrencyId>
-		+ pallet_contracts::Config
-		+ orml_currencies::Config<MultiCurrency = Tokens, AccountId = AccountId>
-		+ orml_currencies_allowance_extension::Config
-		+ dia_oracle::Config,
-	E: Ext<T = T>,
-{
-	let mut env = env.buf_in_buf_out();
-	let base_weight = <T as frame_system::Config>::DbWeight::get().reads(1);
-	env.charge_weight(base_weight.saturating_add(overhead_weight))?;
-	let input = env.read(256)?;
-	let (currency_id, owner, spender): (CurrencyId, T::AccountId, T::AccountId) =
-		match chain_ext::decode(input) {
-			Ok(value) => value,
-			Err(_) => return Ok(RetVal::Converging(ChainExtensionOutcome::DecodingError.as_u32())),
-		};
-
-	trace!(
-		"Calling allowance() for currency {:?}, owner {:?} and spender {:?}",
-		currency_id,
-		owner,
-		spender
-	);
-
-	if !orml_currencies_allowance_extension::Pallet::<T>::is_allowed_currency(currency_id) {
-		return Ok(RetVal::Converging(ChainExtensionTokenError::Unsupported.as_u32()))
-	}
-
-	let allowance =
-		orml_currencies_allowance_extension::Pallet::<T>::allowance(currency_id, &owner, &spender);
-
-	if let Err(_) = env.write(&allowance.encode(), false, None) {
-		return Ok(RetVal::Converging(ChainExtensionOutcome::WriteError.as_u32()))
-	};
-	return Ok(RetVal::Converging(ChainExtensionOutcome::Success.as_u32()))
-}
-
-fn approve<E: Ext, T>(
-	mut env: Environment<'_, '_, E, InitState>,
-	overhead_weight: Weight,
-) -> Result<RetVal, DispatchError>
-where
-	T: SysConfig
-		+ orml_tokens::Config<CurrencyId = CurrencyId>
-		+ pallet_contracts::Config
-		+ orml_currencies::Config<MultiCurrency = Tokens, AccountId = AccountId>
-		+ orml_currencies_allowance_extension::Config
-		+ dia_oracle::Config,
-	E: Ext<T = T>,
-{
-	let ext = env.ext();
-	let caller = ext.caller().clone();
-
-	let mut env = env.buf_in_buf_out();
-	let base_weight = <<T as AllowanceConfig>::WeightInfo as AllowanceWeightInfo>::approve();
-	env.charge_weight(base_weight.saturating_add(overhead_weight))?;
-	let input = env.read(256)?;
-	let (currency_id, spender, amount): (CurrencyId, T::AccountId, BalanceOfForChainExt<T>) =
-		match chain_ext::decode(input) {
-			Ok(value) => value,
-			Err(_) => return Ok(RetVal::Converging(ChainExtensionOutcome::DecodingError.as_u32())),
-		};
-
-	trace!(
-		"Calling approve() allowing spender {:?} to transfer {:?} {:?} from {:?}",
-		spender,
-		amount,
-		currency_id,
-		caller
-	);
-
-	if !orml_currencies_allowance_extension::Pallet::<T>::is_allowed_currency(currency_id) {
-		return Ok(RetVal::Converging(ChainExtensionTokenError::Unsupported.as_u32()))
-	}
-
-	orml_currencies_allowance_extension::Pallet::<T>::do_approve_transfer(
-		currency_id,
-		&caller,
-		&spender,
-		amount,
-	)?;
-	return Ok(RetVal::Converging(ChainExtensionOutcome::Success.as_u32()))
-}
-
-fn transfer_from<E: Ext, T>(
-	mut env: Environment<'_, '_, E, InitState>,
-	overhead_weight: Weight,
-) -> Result<RetVal, DispatchError>
-where
-	T: SysConfig
-		+ orml_tokens::Config<CurrencyId = CurrencyId>
-		+ pallet_contracts::Config
-		+ orml_currencies::Config<MultiCurrency = Tokens, AccountId = AccountId>
-		+ orml_currencies_allowance_extension::Config
-		+ dia_oracle::Config,
-	E: Ext<T = T>,
-{
-	let ext = env.ext();
-	let caller = ext.caller().clone();
-
-	let mut env = env.buf_in_buf_out();
-	let base_weight = <<T as AllowanceConfig>::WeightInfo as AllowanceWeightInfo>::transfer_from();
-	env.charge_weight(base_weight.saturating_add(overhead_weight))?;
-	let input = env.read(256)?;
-	let (owner, currency_id, recipient, amount): (
-		T::AccountId,
-		CurrencyId,
-		T::AccountId,
-		BalanceOfForChainExt<T>,
-	) = match chain_ext::decode(input) {
-		Ok(value) => value,
-		Err(_) => return Ok(RetVal::Converging(ChainExtensionOutcome::DecodingError.as_u32())),
-	};
-
-	trace!(
-		"Calling transfer_from() for caller {:?}, sending {:?} {:?}, from {:?} to {:?}",
-		caller,
-		amount,
-		currency_id,
-		owner,
-		recipient
-	);
-
-	if !orml_currencies_allowance_extension::Pallet::<T>::is_allowed_currency(currency_id) {
-		return Ok(RetVal::Converging(ChainExtensionTokenError::Unsupported.as_u32()))
-	}
-
-	orml_currencies_allowance_extension::Pallet::<T>::do_transfer_approved(
-		currency_id,
-		&owner,
-		&caller,
-		&recipient,
-		amount,
-	)?;
-	return Ok(RetVal::Converging(ChainExtensionOutcome::Success.as_u32()))
-}
-
-fn get_coin_info<E: Ext, T>(
-	env: Environment<'_, '_, E, InitState>,
-	overhead_weight: Weight,
-) -> Result<RetVal, DispatchError>
-where
-	T: SysConfig
-		+ orml_tokens::Config<CurrencyId = CurrencyId>
-		+ pallet_contracts::Config
-		+ orml_currencies::Config<MultiCurrency = Tokens, AccountId = AccountId>
-		+ orml_currencies_allowance_extension::Config
-		+ dia_oracle::Config,
-	E: Ext<T = T>,
-{
-	let mut env = env.buf_in_buf_out();
-	let base_weight = <T as frame_system::Config>::DbWeight::get().reads(1);
-	env.charge_weight(base_weight.saturating_add(overhead_weight))?;
-	let (blockchain, symbol): (Blockchain, Symbol) = env.read_as()?;
-
-	let result = <dia_oracle::Pallet<T> as DiaOracle>::get_coin_info(
-		blockchain.to_trimmed_vec(),
-		symbol.to_trimmed_vec(),
-	);
-
-	trace!("Calling get_coin_info() for: {:?}:{:?}", blockchain, symbol);
-
-	let result = match result {
-		Ok(coin_info) => Result::<CoinInfo, ChainExtensionOutcome>::Ok(CoinInfo::from(coin_info)),
-		Err(e) => return Ok(RetVal::Converging(ChainExtensionOutcome::from(e).as_u32())),
-	};
-
-	if let Err(_) = env.write(&result.encode(), false, None) {
-		return Ok(RetVal::Converging(ChainExtensionOutcome::WriteError.as_u32()))
-	};
-	return Ok(RetVal::Converging(ChainExtensionOutcome::Success.as_u32()))
 }
 
 impl pallet_contracts::Config for Runtime {
@@ -1517,23 +1047,22 @@ impl pallet_contracts::Config for Runtime {
 	type CallStack = [pallet_contracts::Frame<Self>; 5];
 	type WeightPrice = pallet_transaction_payment::Pallet<Self>;
 	type WeightInfo = pallet_contracts::weights::SubstrateWeight<Self>;
-	type ChainExtension = Psp22Extension;
-	type DeletionQueueDepth = DeletionQueueDepth;
-	type DeletionWeightLimit = DeletionWeightLimit;
+	type ChainExtension =
+		(TokensChainExtension<Self, Tokens, AccountId>, PriceChainExtension<Self>);
 	type Schedule = Schedule;
 	type AddressGenerator = pallet_contracts::DefaultAddressGenerator;
 	type MaxCodeLen = ConstU32<{ 123 * 1024 }>;
 	type MaxStorageKeyLen = ConstU32<128>;
 	type UnsafeUnstableInterface = ConstBool<true>;
 	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
+	type DefaultDepositLimit = DefaultDepositLimit;
 }
 
 impl pallet_insecure_randomness_collective_flip::Config for Runtime {}
 
 impl orml_currencies_allowance_extension::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo =
-		orml_currencies_allowance_extension::default_weights::SubstrateWeight<Runtime>;
+	type WeightInfo = weights::orml_currencies_allowance_extension::SubstrateWeight<Runtime>;
 	type MaxAllowedCurrencies = ConstU32<256>;
 }
 
@@ -1627,6 +1156,14 @@ impl currency::CurrencyConversion<currency::Amount<Runtime>, CurrencyId> for Cur
 
 parameter_types! {
 	pub const RelayChainCurrencyId: CurrencyId = XCM(0);
+	// This specific asset is used for benchmarking Spacewalk pallets as it's already used as the wrapped currency in the genesis config
+	pub const GetWrappedCurrencyId: CurrencyId = CurrencyId::Stellar(Asset::AlphaNum4 {
+		code: *b"USDC",
+		issuer: [
+			59, 153, 17, 56, 14, 254, 152, 139, 160, 168, 144, 14, 177, 207, 228, 79, 54, 111, 125,
+			190, 148, 107, 237, 7, 114, 64, 247, 246, 36, 223, 21, 197,
+		],
+	});
 }
 impl currency::Config for Runtime {
 	type UnsignedFixedPoint = UnsignedFixedPoint;
@@ -1634,6 +1171,8 @@ impl currency::Config for Runtime {
 	type SignedFixedPoint = SignedFixedPoint;
 	type Balance = Balance;
 	type GetRelayChainCurrencyId = RelayChainCurrencyId;
+	#[cfg(feature = "runtime-benchmarks")]
+	type GetWrappedCurrencyId = GetWrappedCurrencyId;
 	type AssetConversion = primitives::AssetConversion;
 	type BalanceConversion = primitives::BalanceConversion;
 	type CurrencyConversion = CurrencyConvert;
@@ -1643,7 +1182,9 @@ impl currency::Config for Runtime {
 parameter_types! {
 	pub const FarmingKeeperPalletId: PalletId = PalletId(*b"fo/fmkpr");
 	pub const FarmingRewardIssuerPalletId: PalletId = PalletId(*b"fo/fmrir");
+	pub const FarmingBoostPalletId: PalletId = PalletId(*b"fo/fmbst");
 	pub FoucocoTreasuryAccount: AccountId = TreasuryPalletId::get().into_account_truncating();
+	pub const WhitelistMaximumLimit: u32 = 10;
 }
 
 impl farming::Config for Runtime {
@@ -1655,6 +1196,10 @@ impl farming::Config for Runtime {
 	type TreasuryAccount = FoucocoTreasuryAccount;
 	type Keeper = FarmingKeeperPalletId;
 	type RewardIssuer = FarmingRewardIssuerPalletId;
+	type FarmingBoost = FarmingBoostPalletId;
+	type VeMinting = ();
+	type BlockNumberToBalance = ConvertInto;
+	type WhitelistMaximumLimit = WhitelistMaximumLimit;
 }
 
 impl security::Config for Runtime {
@@ -1675,10 +1220,35 @@ impl staking::Config for Runtime {
 	type MaxRewardCurrencies = MaxRewardCurrencies;
 }
 
+cfg_if::cfg_if! {
+	if #[cfg(feature = "runtime-benchmarks")] {
+		use oracle::testing_utils::{
+			MockConvertMoment, MockConvertPrice, MockDiaOracle, MockOracleKeyConvertor,
+		};
+		type DataProviderImpl = DiaOracleAdapter<
+			MockDiaOracle,
+			UnsignedFixedPoint,
+			Moment,
+			MockOracleKeyConvertor,
+			MockConvertPrice,
+			MockConvertMoment<Moment>,
+		>;
+	} else {
+		type DataProviderImpl = DiaOracleAdapter<
+			DiaOracleModule,
+			UnsignedFixedPoint,
+			Moment,
+			asset_registry::AssetRegistryToDiaOracleKeyConvertor<Runtime>,
+			ConvertPrice,
+			ConvertMoment,
+		>;
+	}
+}
+
 impl oracle::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = oracle::SubstrateWeight<Runtime>;
-	type DecimalsLookup = spacewalk_primitives::AmplitudeDecimalsLookup;
+	type WeightInfo = weights::oracle::SubstrateWeight<Runtime>;
+	type DecimalsLookup = DecimalsLookupImpl;
 	type DataProvider = DataProviderImpl;
 	#[cfg(feature = "runtime-benchmarks")]
 	type DataFeeder = MockDataFeeder<Self::AccountId, Moment>;
@@ -1696,7 +1266,7 @@ impl stellar_relay::Config for Runtime {
 	type OrganizationLimit = OrganizationLimit;
 	type ValidatorLimit = ValidatorLimit;
 	type IsPublicNetwork = IsPublicNetwork;
-	type WeightInfo = stellar_relay::SubstrateWeight<Runtime>;
+	type WeightInfo = weights::stellar_relay::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -1709,7 +1279,7 @@ parameter_types! {
 
 impl fee::Config for Runtime {
 	type FeePalletId = FeePalletId;
-	type WeightInfo = fee::SubstrateWeight<Runtime>;
+	type WeightInfo = weights::fee::SubstrateWeight<Runtime>;
 	type SignedFixedPoint = SignedFixedPoint;
 	type SignedInner = SignedInner;
 	type UnsignedFixedPoint = UnsignedFixedPoint;
@@ -1725,13 +1295,13 @@ impl vault_registry::Config for Runtime {
 	type PalletId = VaultRegistryPalletId;
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = Balance;
-	type WeightInfo = vault_registry::SubstrateWeight<Runtime>;
+	type WeightInfo = weights::vault_registry::SubstrateWeight<Runtime>;
 	type GetGriefingCollateralCurrencyId = NativeCurrencyId;
 }
 
 impl redeem::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = redeem::SubstrateWeight<Runtime>;
+	type WeightInfo = weights::redeem::SubstrateWeight<Runtime>;
 }
 
 pub struct BlockNumberToBalance;
@@ -1745,17 +1315,17 @@ impl sp_runtime::traits::Convert<BlockNumber, Balance> for BlockNumberToBalance 
 impl issue::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type BlockNumberToBalance = BlockNumberToBalance;
-	type WeightInfo = issue::SubstrateWeight<Runtime>;
+	type WeightInfo = weights::issue::SubstrateWeight<Runtime>;
 }
 
 impl nomination::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = nomination::SubstrateWeight<Runtime>;
+	type WeightInfo = weights::nomination::SubstrateWeight<Runtime>;
 }
 
 impl replace::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = replace::SubstrateWeight<Runtime>;
+	type WeightInfo = weights::replace::SubstrateWeight<Runtime>;
 }
 
 impl clients_info::Config for Runtime {
@@ -1927,7 +1497,7 @@ construct_runtime!(
 		ClientsInfo: clients_info::{Pallet, Call, Storage, Event<T>} = 72,
 		RewardDistribution: reward_distribution::{Pallet, Call, Storage, Event<T>} = 73,
 
-		TokenAllowance: orml_currencies_allowance_extension::{Pallet, Storage, Call, Event<T>} = 80,
+		TokenAllowance: orml_currencies_allowance_extension::{Pallet, Storage, Call, Event<T>, Config<T>} = 80,
 		OrmlExtension: orml_tokens_management_extension::{Pallet, Storage, Call, Event<T>} = 81,
 
 		TreasuryBuyoutExtension: treasury_buyout_extension::{Pallet, Storage, Call, Event<T>} = 82,
@@ -1936,6 +1506,7 @@ construct_runtime!(
 
 		// Asset Metadata
 		AssetRegistry: orml_asset_registry::{Pallet, Storage, Call, Event<T>, Config<T>} = 91,
+
 	}
 );
 
@@ -1952,6 +1523,7 @@ mod benches {
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_timestamp, Timestamp]
 		[cumulus_pallet_xcmp_queue, XcmpQueue]
+		[parachain_staking, ParachainStaking]
 
 		[fee, Fee]
 		[issue, Issue]
@@ -2000,6 +1572,14 @@ impl_runtime_apis! {
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
 			OpaqueMetadata::new(Runtime::metadata().into())
+		}
+
+		fn metadata_at_version(version: u32) -> Option<OpaqueMetadata> {
+			Runtime::metadata_at_version(version)
+		}
+
+		fn metadata_versions() -> sp_std::vec::Vec<u32> {
+			Runtime::metadata_versions()
 		}
 	}
 
@@ -2226,11 +1806,15 @@ impl_runtime_apis! {
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use baseline::Pallet as BaselineBench;
 
+			#[allow(non_local_definitions)]
 			impl frame_system_benchmarking::Config for Runtime {}
+			#[allow(non_local_definitions)]
 			impl baseline::Config for Runtime {}
+			#[allow(non_local_definitions)]
 			impl runtime_common::benchmarking::orml_asset_registry::Config for Runtime {}
 
 			use cumulus_pallet_session_benchmarking::Pallet as SessionBench;
+			#[allow(non_local_definitions)]
 			impl cumulus_pallet_session_benchmarking::Config for Runtime {}
 
 			let whitelist: Vec<TrackedStorageKey> = vec![
@@ -2383,7 +1967,7 @@ impl_runtime_apis! {
 				storage_deposit_limit,
 				input_data,
 				CONTRACTS_DEBUG_OUTPUT,
-				pallet_contracts::Determinism::Deterministic,
+				pallet_contracts::Determinism::Enforced,
 			)
 		}
 
@@ -2447,6 +2031,7 @@ impl_runtime_apis! {
 
 }
 
+#[allow(dead_code)]
 struct CheckInherents;
 
 impl cumulus_pallet_parachain_system::CheckInherents<Block> for CheckInherents {

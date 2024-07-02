@@ -1,13 +1,23 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![allow(non_snake_case)]
 
+use asset_registry::CustomMetadata;
+use core::{fmt::Debug, marker::PhantomData};
+#[cfg(feature = "runtime-benchmarks")]
+use dia_oracle::CoinInfo;
+use dia_oracle::DiaOracle;
+use orml_traits::asset_registry::Inspect;
 use sp_runtime::{
-	traits::{CheckedDiv, IdentifyAccount, Saturating, Verify},
-	DispatchError, MultiSignature,
+	traits::{Convert, IdentifyAccount, One, Verify, Zero},
+	DispatchError, FixedPointNumber, FixedU128, MultiSignature,
 };
+#[cfg(feature = "runtime-benchmarks")]
+use sp_std::vec;
+use spacewalk_primitives::CurrencyId;
+use treasury_buyout_extension::PriceGetter;
+use xcm::v3::{AssetId, MultiAsset, MultiLocation};
 
 pub mod asset_registry;
-pub mod chain_ext;
 pub mod custom_transactor;
 mod proxy_type;
 pub mod stellar;
@@ -70,29 +80,6 @@ pub mod opaque {
 	pub type BlockId = generic::BlockId<Block>;
 }
 
-pub struct RelativeValue<Amount> {
-	pub num: Amount,
-	pub denominator: Amount,
-}
-
-impl<Amount: CheckedDiv<Output = Amount> + Saturating + Clone> RelativeValue<Amount> {
-	pub fn divide_by_relative_value(
-		amount: Amount,
-		relative_value: RelativeValue<Amount>,
-	) -> Amount {
-		// Calculate the adjusted amount
-		if let Some(adjusted_amount) = amount
-			.clone()
-			.saturating_mul(relative_value.denominator)
-			.checked_div(&relative_value.num)
-		{
-			return adjusted_amount
-		}
-		// We should never specify a numerator of 0, but just to be safe
-		return amount
-	}
-}
-
 #[macro_use]
 pub mod parachains {
 
@@ -123,6 +110,7 @@ pub mod parachains {
 	}
 
 	/// Creates a location for the given asset in this format: `fn <asset_name>_location() -> MultiLocation`
+	#[macro_export]
 	macro_rules! parachain_asset_location {
 		// Also declares a constant variable <asset_name>_ASSET_ID with <asset_value>.
 		// This assumes that the following constant variables exist:
@@ -159,135 +147,141 @@ pub mod parachains {
 			}
 		};
 	}
+}
 
-	pub mod polkadot {
-		pub mod asset_hub {
-			pub const PARA_ID: u32 = 1000;
-			pub const ASSET_PALLET_INDEX: u8 = 50;
+/// CurrencyIdConvert
+/// This type implements conversions from our `CurrencyId` type into `MultiLocation` and vice-versa.
+/// A currency locally is identified with a `CurrencyId` variant but in the network it is identified
+/// in the form of a `MultiLocation`, in this case a pCfg (Para-Id, Currency-Id).
+pub struct CurrencyIdConvert<AssetRegistry>(sp_std::marker::PhantomData<AssetRegistry>);
 
-			parachain_asset_location!(USDC, 1337);
-			parachain_asset_location!(USDT, 1984);
-		}
-
-		pub mod equilibrium {
-			pub const PARA_ID: u32 = 2011;
-			pub const ASSET_PALLET_INDEX: u8 = 11;
-
-			parachain_asset_location!(EQ, 25_969);
-			parachain_asset_location!(EQD, 6_648_164);
-		}
-
-		pub mod moonbeam {
-			use xcm::latest::{
-				Junction::{AccountKey20, PalletInstance, Parachain},
-				Junctions::{X2, X3},
-			};
-
-			pub const PARA_ID: u32 = 2004;
-			pub const ASSET_PALLET_INDEX: u8 = 110;
-			pub const BALANCES_PALLET_INDEX: u8 = 10;
-
-			// The address of the BRZ token on Moonbeam `0x3225edCe8aD30Ae282e62fa32e7418E4b9cf197b` as byte array
-			pub const BRZ_ASSET_ACCOUNT_IN_BYTES: [u8; 20] = [
-				50, 37, 237, 206, 138, 211, 10, 226, 130, 230, 47, 163, 46, 116, 24, 228, 185, 207,
-				25, 123,
-			];
-
-			parachain_asset_location!(
-				BRZ,
-				X3(
-					Parachain(PARA_ID),
-					PalletInstance(ASSET_PALLET_INDEX),
-					AccountKey20 { network: None, key: BRZ_ASSET_ACCOUNT_IN_BYTES }
-				)
-			);
-
-			parachain_asset_location!(
-				GLMR,
-				X2(Parachain(PARA_ID), PalletInstance(BALANCES_PALLET_INDEX))
-			);
-		}
-
-		pub mod polkadex {
-			use xcm::latest::{Junction::Parachain, Junctions::X1};
-
-			pub const PARA_ID: u32 = 2040;
-
-			parachain_asset_location!(PDEX, X1(Parachain(PARA_ID)));
-		}
+impl<
+		AssetRegistry: Inspect<AssetId = CurrencyId, Balance = Balance, CustomMetadata = CustomMetadata>,
+	> Convert<CurrencyId, Option<MultiLocation>> for CurrencyIdConvert<AssetRegistry>
+{
+	fn convert(id: CurrencyId) -> Option<MultiLocation> {
+		<AssetRegistry as Inspect>::metadata(&id)
+			.filter(|m| m.location.is_some())
+			.and_then(|m| m.location)
+			.and_then(|l| l.try_into().ok())
 	}
+}
 
-	pub mod kusama {
-		/// values of kusama asset_hub is similar to polkadot's asset_hub
-		pub mod asset_hub {
-			pub use super::super::polkadot::asset_hub::*;
-		}
+impl<
+		AssetRegistry: Inspect<AssetId = CurrencyId, Balance = Balance, CustomMetadata = CustomMetadata>,
+	> Convert<MultiLocation, Option<CurrencyId>> for CurrencyIdConvert<AssetRegistry>
+{
+	fn convert(location: MultiLocation) -> Option<CurrencyId> {
+		<AssetRegistry as Inspect>::asset_id(&location)
 	}
+}
 
-	pub mod moonbase_alpha_relay {
-		pub mod moonbase_alpha {
-			use xcm::latest::{
-				Junction::{PalletInstance, Parachain},
-				Junctions::X2,
-			};
-
-			pub const PARA_ID: u32 = 1000;
-			pub const BALANCES_PALLET_INDEX: u8 = 3;
-
-			parachain_asset_location!(
-				DEV,
-				X2(Parachain(PARA_ID), PalletInstance(BALANCES_PALLET_INDEX))
-			);
+impl<
+		AssetRegistry: Inspect<AssetId = CurrencyId, Balance = Balance, CustomMetadata = CustomMetadata>,
+	> Convert<MultiAsset, Option<CurrencyId>> for CurrencyIdConvert<AssetRegistry>
+{
+	fn convert(a: MultiAsset) -> Option<CurrencyId> {
+		if let MultiAsset { id: AssetId::Concrete(id), fun: _ } = a {
+			<Self as Convert<MultiLocation, Option<CurrencyId>>>::convert(id)
+		} else {
+			None
 		}
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::parachains::polkadot::*;
-	use xcm::{
-		latest::prelude::{AccountKey20, PalletInstance, Parachain},
-		prelude::GeneralIndex,
-	};
-
-	#[test]
-	fn test_BRZ() {
-		let brz_loc = moonbeam::BRZ_location();
-		let mut junctions = brz_loc.interior().into_iter();
-
-		assert_eq!(junctions.next(), Some(&Parachain(moonbeam::PARA_ID)));
-		assert_eq!(junctions.next(), Some(&PalletInstance(moonbeam::ASSET_PALLET_INDEX)));
-		assert_eq!(
-			junctions.next(),
-			Some(&AccountKey20 { network: None, key: moonbeam::BRZ_ASSET_ACCOUNT_IN_BYTES })
-		);
-		assert_eq!(junctions.next(), None);
+/// Convert an incoming `MultiLocation` into a `CurrencyId` if possible.
+/// Here we need to know the canonical representation of all the tokens we handle in order to
+/// correctly convert their `MultiLocation` representation into our internal `CurrencyId` type.
+impl<
+		AssetRegistry: Inspect<AssetId = CurrencyId, Balance = Balance, CustomMetadata = CustomMetadata>,
+	> xcm_executor::traits::Convert<MultiLocation, CurrencyId> for CurrencyIdConvert<AssetRegistry>
+{
+	fn convert(location: MultiLocation) -> Result<CurrencyId, MultiLocation> {
+		<CurrencyIdConvert<AssetRegistry> as Convert<MultiLocation, Option<CurrencyId>>>::convert(
+			location,
+		)
+		.ok_or(location)
 	}
+}
 
-	#[test]
-	fn test_GLMR() {
-		let glmr_loc = moonbeam::GLMR_location();
-		let mut junctions = glmr_loc.interior().into_iter();
+pub struct OraclePriceGetter<Runtime>(PhantomData<Runtime>);
+impl<
+		Runtime: treasury_buyout_extension::Config
+			+ dia_oracle::Config
+			+ orml_asset_registry::Config<AssetId = CurrencyId, CustomMetadata = CustomMetadata>,
+	> PriceGetter<CurrencyId> for OraclePriceGetter<Runtime>
+{
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	fn get_price<FixedNumber>(currency_id: CurrencyId) -> Result<FixedNumber, DispatchError>
+	where
+		FixedNumber: FixedPointNumber + One + Zero + Debug + TryFrom<FixedU128>,
+	{
+		let asset_metadata = orml_asset_registry::Pallet::<Runtime>::metadata(currency_id)
+			.ok_or(DispatchError::Other("Asset not found"))?;
 
-		assert_eq!(junctions.next(), Some(&Parachain(moonbeam::PARA_ID)));
-		assert_eq!(junctions.next(), Some(&PalletInstance(moonbeam::BALANCES_PALLET_INDEX)));
-		assert_eq!(junctions.next(), None);
+		let blockchain = asset_metadata.additional.dia_keys.blockchain.into_inner();
+		let symbol = asset_metadata.additional.dia_keys.symbol.into_inner();
+
+		if let Ok(asset_info) =
+			<dia_oracle::Pallet<Runtime> as DiaOracle>::get_coin_info(blockchain, symbol)
+		{
+			let price = FixedNumber::try_from(FixedU128::from_inner(asset_info.price))
+				.map_err(|_| DispatchError::Other("Failed to convert price"))?;
+			return Ok(price);
+		} else {
+			return Err(DispatchError::Other("Failed to get coin info"));
+		}
 	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn get_price<FixedNumber>(currency_id: CurrencyId) -> Result<FixedNumber, DispatchError>
+	where
+		FixedNumber: FixedPointNumber + One + Zero + Debug + TryFrom<FixedU128>,
+	{
+		let default_price =
+			FixedU128::checked_from_rational(100, 1).expect("This is a valid ratio");
 
-	#[test]
-	fn test_constants() {
-		let expected_EQ_value = 25_969;
-		assert_eq!(equilibrium::EQ_ASSET_ID, expected_EQ_value);
+		let (blockchain, symbol) =
+			match orml_asset_registry::Pallet::<Runtime>::metadata(currency_id) {
+				Some(asset_metadata) => {
+					let blockchain = asset_metadata.additional.dia_keys.blockchain.into_inner();
+					let symbol = asset_metadata.additional.dia_keys.symbol.into_inner();
+					(blockchain, symbol)
+				},
+				None => {
+					// If there's no metadata in asset registry, then there's no way to fetch the price
+					// We have to set the price manually in the oracle using the default values for blockchain and symbol
+					let blockchain = b"blockchain".to_vec();
+					let symbol = b"symbol".to_vec();
+					let coin_infos = vec![(
+						(blockchain.clone(), symbol.clone()),
+						CoinInfo {
+							blockchain: blockchain.clone(),
+							symbol: symbol.clone(),
+							price: default_price.into_inner(),
+							..Default::default()
+						},
+					)];
+					// If this fails, we still want to return a default price so we don't throw an error here
+					let _ = dia_oracle::Pallet::<Runtime>::set_updated_coin_infos(
+						frame_system::RawOrigin::Root.into(),
+						coin_infos,
+					);
 
-		let eq_interior = equilibrium::EQ_location().interior;
-		let mut junctions = eq_interior.into_iter();
+					(blockchain, symbol)
+				},
+			};
 
-		assert_eq!(junctions.next(), Some(Parachain(equilibrium::PARA_ID)));
-		assert_eq!(junctions.next(), Some(PalletInstance(equilibrium::ASSET_PALLET_INDEX)));
-		assert_eq!(junctions.next(), Some(GeneralIndex(equilibrium::EQ_ASSET_ID)));
-		assert_eq!(junctions.next(), None);
-
-		let expected_USDT_value = 1984;
-		assert_eq!(asset_hub::USDT_ASSET_ID, expected_USDT_value);
+		if let Ok(asset_info) =
+			<dia_oracle::Pallet<Runtime> as DiaOracle>::get_coin_info(blockchain, symbol)
+		{
+			let price = FixedNumber::try_from(FixedU128::from_inner(asset_info.price))
+				.map_err(|_| DispatchError::Other("Failed to convert price"))?;
+			Ok(price)
+		} else {
+			// Returning a default value in case fetching price from the oracle fails
+			let price = FixedNumber::try_from(default_price)
+				.map_err(|_| DispatchError::Other("Failed to convert price"))?;
+			Ok(price)
+		}
 	}
 }

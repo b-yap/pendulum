@@ -5,7 +5,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use core::marker::PhantomData;
 use frame_support::{
 	log, match_types, parameter_types,
-	traits::{ConstU32, ContainsPair, Everything, Nothing},
+	traits::{ConstU32, ContainsPair, Everything, Nothing, ProcessMessageError},
 };
 use frame_system::EnsureRoot;
 use orml_traits::{
@@ -15,7 +15,6 @@ use orml_traits::{
 use pallet_xcm::XcmPassthrough;
 use polkadot_parachain::primitives::Sibling;
 use polkadot_runtime_common::MAXIMUM_BLOCK_WEIGHT;
-use runtime_common::parachains::polkadot::asset_hub;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
@@ -43,9 +42,9 @@ use xcm_builder::{
 	SignedToAccountId32, SovereignSignedViaLocation,
 };
 
-use crate::{AMPLITUDE_ID, ASSETHUB_ID, PENDULUM_ID};
+use crate::{definitions::asset_hub, AMPLITUDE_ID, ASSETHUB_ID, PENDULUM_ID};
 
-use runtime_common::parachains::polkadot::moonbeam::BRZ_location;
+use pendulum_runtime::definitions::moonbeam::BRZ_location;
 
 const XCM_ASSET_RELAY_DOT: u8 = 0;
 const XCM_ASSET_ASSETHUB_USDT: u8 = 1;
@@ -259,6 +258,8 @@ match_types! {
 //TODO: move DenyThenTry to polkadot's xcm module.
 /// Deny executing the xcm message if it matches any of the Deny filter regardless of anything else.
 /// If it passes the Deny, and matches one of the Allow cases then it is let through.
+
+#[allow(dead_code)]
 pub struct DenyThenTry<Deny, Allow>(PhantomData<Deny>, PhantomData<Allow>)
 where
 	Deny: ShouldExecute,
@@ -274,13 +275,14 @@ where
 		instructions: &mut [Instruction<RuntimeCall>],
 		max_weight: XCMWeight,
 		weight_credit: &mut XCMWeight,
-	) -> Result<(), ()> {
+	) -> Result<(), ProcessMessageError> {
 		Deny::should_execute(origin, instructions, max_weight, weight_credit)?;
 		Allow::should_execute(origin, instructions, max_weight, weight_credit)
 	}
 }
 
 // See issue #5233
+#[allow(dead_code)]
 pub struct DenyReserveTransferToRelayChain;
 impl ShouldExecute for DenyReserveTransferToRelayChain {
 	fn should_execute<RuntimeCall>(
@@ -288,7 +290,7 @@ impl ShouldExecute for DenyReserveTransferToRelayChain {
 		instructions: &mut [Instruction<RuntimeCall>],
 		_max_weight: XCMWeight,
 		_weight_credit: &mut XCMWeight,
-	) -> Result<(), ()> {
+	) -> Result<(), ProcessMessageError> {
 		if instructions.iter().any(|inst| {
 			matches!(
 				inst,
@@ -302,7 +304,7 @@ impl ShouldExecute for DenyReserveTransferToRelayChain {
 					}
 			)
 		}) {
-			return Err(()) // Deny
+			return Err(ProcessMessageError::Unsupported) // Deny
 		}
 
 		// allow reserve transfers to arrive from relay chain
@@ -389,6 +391,7 @@ impl pallet_xcm::Config for Runtime {
 	type WeightInfo = pallet_xcm::TestWeightInfo;
 	#[cfg(feature = "runtime-benchmarks")]
 	type ReachableDest = ReachableDest;
+	type AdminOrigin = EnsureRoot<AccountId>;
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -555,6 +558,10 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 	type MaxReserves = MaxReserves;
 	type ReserveIdentifier = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type MaxHolds = ConstU32<1>;
+	type HoldIdentifier = RuntimeHoldReason;
 }
 
 parameter_types! {

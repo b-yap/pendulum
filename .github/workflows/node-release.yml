@@ -1,44 +1,56 @@
 name: Node Release
 
 on:
-  push:
-    tags:
-      - v*
+  pull_request:
     branches:
       - main
-  pull_request:
+  push:
     branches:
       - main
 
 jobs:
   bump-version:
     runs-on: ubuntu-latest
-#    if: ${{ contains(github.event.pull_request.title, 'release:') }}
+    #    if: ${{ contains(github.event.pull_request.title, 'release:') }}
     name: bump version
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: run cargo-bump
-        id: cargo-bump
-        uses: tj-actions/cargo-bump@v3
-        with:
-          working-directory: ./node
-      - name: Verify Changed files
-        id: verify-changed-files
-        uses: tj-actions/verify-changed-files@v20
-        with:
-          files: |
-            node/**
+      - name: Setup user
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+      - name: install cargo-edit
+        run: |
+          cargo install cargo-edit
+      - name: set new version
+        continue-on-error: false
+        run: |
+          cargo set-version --bump patch --package pendulum-node
+      - name: save updated version
+        id: new-version
+        run: |
+          cd node
+          echo "version=$(cargo metadata --format-version=1 --no-deps | jq '.packages[0].version')" >> "$GITHUB_OUTPUT"
+          cd ..
+      - name: save branch name
+        id: branch-name
+        run: |
+          echo "branch_name=release/upgrade-node-to-${{ steps.new-version.outputs.version }}" >> "$GITHUB_OUTPUT"
+      - name: checkout to new version
+        run: |
+          git checkout -b ${{ steps.branch-name.outputs.branch_name }}
+          git add node/Cargo.toml
+          git commit -m "upgrade node to ${{ steps.new-version.outputs.version }}"
+          git push --set-upstream origin ${{ steps.branch-name.outputs.branch_name }}
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6.1.0
-        if: steps.verify-changed-files.outputs.files_changed == 'true'
         with:
           base: "main"
-          labels: "merge when passing"
-          title: "chore: upgrade node"
-          branch: "chore/upgrade-to-${{ steps.cargo-bump.outputs.new_version }}"
-          body: "View [CHANGES](https://github.com/${{ github.repository }}/compare/${{ steps.cargo-bump.outputs.old_version }}...${{ steps.cargo-bump.outputs.new_version }})"
-          token: ${{ secrets.PAT_TOKEN }}
+          title: "release: upgrade node to ${{ steps.new-version.outputs.version }}"
+          branch: "${{ steps.branch-name.outputs.branch_name }}"
+          body: "View [CHANGES](https://github.com/${{ github.repository }}/compare/main...release/upgrade-node-to-${{ steps.new-version.outputs.version}})"
+          token: ${{ secrets.GITHUB_TOKEN }}
 
