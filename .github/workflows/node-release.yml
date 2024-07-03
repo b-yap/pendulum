@@ -28,7 +28,7 @@ jobs:
       - name: set new version
         continue-on-error: false
         run: |
-          cargo set-version --bump patch --package pendulum-node
+          cargo set-version --bump patch
       - name: save updated version
         id: new-version
         run: |
