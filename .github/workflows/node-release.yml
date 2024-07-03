@@ -32,17 +32,18 @@ jobs:
       - name: save updated version
         id: new-version
         run: |
+          cd pendulum-node
           echo "version=$(cargo metadata --format-version=1 --no-deps | jq '.packages[0].version')" >> "$GITHUB_OUTPUT"
+          cd ..
       - name: save branch name
         id: branch-name
         run: |
-          cd pendulum-node
           echo "branch_name=release/upgrade-node-to-${{ steps.new-version.outputs.version }}" >> "$GITHUB_OUTPUT"
-          cd ..
       - name: checkout to new version
         run: |
           git checkout -b ${{ steps.branch-name.outputs.branch_name }}
-          git add --all
+          git add pendulum-node/Cargo.toml
+          git add Cargo.lock
           git commit -m "upgrade node to ${{ steps.new-version.outputs.version }}"
           git push --set-upstream origin ${{ steps.branch-name.outputs.branch_name }}
       - name: Create Pull Request
