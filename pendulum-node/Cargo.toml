@@ -1,12 +1,12 @@
 [package]
-name = "pendulum-node"
-version = "0.1.0"
 authors = ["Pendulum"]
-description = "The Pendulum/Amplitude collator node"
-homepage = "https://pendulumchain.org"
-repository = "https://github.com/pendulum-chain/pendulum"
-edition = "2021"
 build = "build.rs"
+description = "The Pendulum/Amplitude collator node"
+edition = "2021"
+homepage = "https://pendulumchain.org"
+name = "pendulum-node"
+repository = "https://github.com/pendulum-chain/pendulum"
+version = "0.1.0"
 
 [dependencies]
 clap = { version = "4.0.17", features = ["derive"] }

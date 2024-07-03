@@ -6,7 +6,7 @@ inherits = "release"
 
 [workspace]
 members = [
-	"node",
+	"pendulum-node",
 	"pallets/parachain-staking",
 	"pallets/vesting-manager",
 	"pallets/orml-currencies-allowance-extension",
