@@ -1,18 +1,12 @@
 name: Node Version Up
 
 on:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
-#  workflow_dispatch:
-#    inputs:
-#      versioning:
-#        description: "node version up: major, minor, or patch"
-#        required: true
-#        default: "patch"
+  workflow_dispatch:
+    inputs:
+      versioning:
+        description: "node version up: major, minor, or patch"
+        required: true
+        default: "patch"
 
 jobs:
   bump-version:
@@ -30,12 +24,10 @@ jobs:
       - name: install cargo-edit
         run: |
           cargo install cargo-edit
-#      - name: set new version ${{ github.event.inputs.versioning }}
-      - name: set new version
+      - name: set new version ${{ github.event.inputs.versioning }}
         continue-on-error: false
         run: |
-          cargo set-version --bump patch --package pendulum-node
-#          cargo set-version --bump ${{ github.event.inputs.versioning }} --package pendulum-node
+          cargo set-version --bump ${{ github.event.inputs.versioning }} --package pendulum-node
       - name: save updated version
         id: new-version
         run: |
@@ -60,12 +52,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ steps.branch-name.outputs.branch_name }}
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6.1.0
-        with:
-          base: "main"
-          title: "release: upgrade node to ${{ steps.new-version.outputs.version }}"
-          branch: "${{ steps.branch-name.outputs.branch_name }}"
-          body: "View [CHANGES](https://github.com/${{ github.repository }}/compare/main...release/upgrade-node-to-${{ steps.new-version.outputs.version}})"
-          token: ${{ secrets.GITHUB_TOKEN }}
+#      - name: Create Pull Request
+#        uses: peter-evans/create-pull-request@v6.1.0
+#        with:
+#          base: "main"
+#          title: "release: upgrade node to ${{ steps.new-version.outputs.version }}"
+#          branch: "${{ steps.branch-name.outputs.branch_name }}"
+#          body: "View [CHANGES](https://github.com/${{ github.repository }}/compare/main...release/upgrade-node-to-${{ steps.new-version.outputs.version}})"
+#          token: ${{ secrets.GITHUB_TOKEN }}
 
