@@ -4,16 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       versioning:
-        description: "node version: major, minor, or patch"
+        description: "node version up: major, minor, or patch"
         required: true
         default: "patch"
-
-#  pull_request:
-#    branches:
-#      - main
-#  push:
-#    branches:
-#      - main
 
 jobs:
   bump-version:
@@ -45,10 +38,15 @@ jobs:
         id: branch-name
         run: |
           echo "branch_name=release/upgrade-node-to-${{ steps.new-version.outputs.version }}" >> "$GITHUB_OUTPUT"
-      - name: checkout to new version
+          git checkout -b release/upgrade-node-to-${{ steps.new-version.outputs.version }}
+      - name: commit new version up
+        uses: qoomon/actions--create-commit@v1
+        id: commit
+        with:
+          message: "upgrade node to ${{ steps.new-version.outputs.version }}"
+          skip-empty: true
+      - if: ${{ steps.commit.outputs.commit != null }}
         run: |
-          git checkout -b ${{ steps.branch-name.outputs.branch_name }}
-          git commit -a -m "upgrade node to ${{ steps.new-version.outputs.version }}"
           git push --set-upstream origin ${{ steps.branch-name.outputs.branch_name }}
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6.1.0
