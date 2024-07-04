@@ -59,3 +59,4 @@ jobs:
           title: "release: upgrade node to ${{ steps.new-version.outputs.version }}"
           head: ${{ steps.branch-name.outputs.branch_name }}
           base: main
+          reviewers: "@b-yap"
