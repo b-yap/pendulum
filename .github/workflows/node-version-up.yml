@@ -58,5 +58,5 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           base: "main"
           title: "release: upgrade node to ${{ steps.new-version.outputs.version }}"
-          head: ${{ github.ref }}
+          head: ${{ steps.branch-name.outputs.branch_name }}
 
