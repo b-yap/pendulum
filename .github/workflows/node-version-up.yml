@@ -39,6 +39,7 @@ jobs:
         run: |
           echo "branch_name=release/upgrade-node-to-${{ steps.new-version.outputs.version }}" >> "$GITHUB_OUTPUT"
           git checkout -b release/upgrade-node-to-${{ steps.new-version.outputs.version }}
+          git push --set-upstream origin release/upgrade-node-to-${{ steps.new-version.outputs.version }}
       - name: commit new version up
         run: |
           gh api graphql \
@@ -53,7 +54,7 @@ jobs:
           BRANCH: ${{ steps.branch-name.outputs.branch_name }}
       - name: push commit
         run: |
-          git push --set-upstream origin ${{ steps.branch-name.outputs.branch_name }}
+          git push
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6.1.0
         with:
