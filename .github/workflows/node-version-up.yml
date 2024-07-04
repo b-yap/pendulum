@@ -60,9 +60,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ steps.branch-name.outputs.branch_name }}
-      - name: push commit
-        run: |
-          git push
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6.1.0
         with:
