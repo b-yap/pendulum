@@ -7,12 +7,12 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
-    inputs:
-      versioning:
-        description: "node version up: major, minor, or patch"
-        required: true
-        default: "patch"
+#  workflow_dispatch:
+#    inputs:
+#      versioning:
+#        description: "node version up: major, minor, or patch"
+#        required: true
+#        default: "patch"
 
 jobs:
   bump-version:
