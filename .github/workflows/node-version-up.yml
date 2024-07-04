@@ -1,17 +1,23 @@
-name: Node Release
+name: Node Version Up
 
 on:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      versioning:
+        description: "node version: major, minor, or patch"
+        required: true
+        default: "patch"
+
+#  pull_request:
+#    branches:
+#      - main
+#  push:
+#    branches:
+#      - main
 
 jobs:
   bump-version:
     runs-on: ubuntu-latest
-    #    if: ${{ contains(github.event.pull_request.title, 'release:') }}
     name: bump version
     steps:
       - name: Checkout
@@ -25,10 +31,10 @@ jobs:
       - name: install cargo-edit
         run: |
           cargo install cargo-edit
-      - name: set new version
+      - name: set new version ${{ github.event.inputs.versioning }}
         continue-on-error: false
         run: |
-          cargo set-version --bump patch --package pendulum-node
+          cargo set-version --bump ${{ github.event.inputs.versioning }} --package pendulum-node
       - name: save updated version
         id: new-version
         run: |
