@@ -39,6 +39,7 @@ jobs:
         run: |
           echo "branch_name=release/upgrade-node-to-${{ steps.new-version.outputs.version }}" >> "$GITHUB_OUTPUT"
           git checkout -b release/upgrade-node-to-${{ steps.new-version.outputs.version }}
+          git push --set-upstream origin release/upgrade-node-to-${{ steps.new-version.outputs.version }}
       - name: commit new version up
         run: |
           gh api graphql \
@@ -51,15 +52,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ steps.branch-name.outputs.branch_name }}
-      - name: push commit
-        run: |
-          git push --set-upstream origin ${{ steps.branch-name.outputs.branch_name }}
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6.1.0
-        with:
-          base: "main"
-          title: "release: upgrade node to ${{ steps.new-version.outputs.version }}"
-          branch: "${{ steps.branch-name.outputs.branch_name }}"
-          body: "View [CHANGES](https://github.com/${{ github.repository }}/compare/main...release/upgrade-node-to-${{ steps.new-version.outputs.version}})"
-          token: ${{ secrets.GITHUB_TOKEN }}
+#      - name: Create Pull Request
+#        uses: peter-evans/create-pull-request@v6.1.0
+#        with:
+#          base: "main"
+#          title: "release: upgrade node to ${{ steps.new-version.outputs.version }}"
+#          branch: "${{ steps.branch-name.outputs.branch_name }}"
+#          body: "View [CHANGES](https://github.com/${{ github.repository }}/compare/main...release/upgrade-node-to-${{ steps.new-version.outputs.version}})"
+#          token: ${{ secrets.GITHUB_TOKEN }}
 
