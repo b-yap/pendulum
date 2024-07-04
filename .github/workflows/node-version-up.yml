@@ -40,14 +40,17 @@ jobs:
           echo "branch_name=release/upgrade-node-to-${{ steps.new-version.outputs.version }}" >> "$GITHUB_OUTPUT"
           git checkout -b release/upgrade-node-to-${{ steps.new-version.outputs.version }}
       - name: commit new version up
-        uses: swinton/commit@v2.x
+        run: |
+          gh api graphql \
+            -F githubRepository=${{ github.repository }} \
+            -F branchName=${{ steps.branch-name.outputs.branch_name }} \
+            -F expectedHeadOid=$(git rev-parse HEAD) \
+            -F commitMessage="chore: upgrade node to ${{ steps.new-version.outputs.version }}"
+            -F files[][path]="node/Cargo.toml" -F files[][contents]=$(base64 -w0 node/Cargo.toml) \
+            -F 'query=@.github/api/createCommitOnBranch.gql'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          files:
-            node/Cargo.toml
-          commit-message: "upgrade node to ${{ steps.new-version.outputs.version }}"
-        id: commit
+          BRANCH: ${{ steps.branch-name.outputs.branch_name }}
       - name: push commit
         run: |
           git push --set-upstream origin ${{ steps.branch-name.outputs.branch_name }}
