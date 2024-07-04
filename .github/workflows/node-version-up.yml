@@ -53,9 +53,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ steps.branch-name.outputs.branch_name }}
       - name: Create Pull Request
-        uses: desbravacloud/action-create-pull-requests@v1
+        uses: gr2m/create-or-update-pull-request-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          origin-branch: ${{ steps.branch-name.outputs.branch_name }}
-          target-branch: 'main'
-          custom-title: 'release: upgrade node to ${{ steps.new-version.outputs.version }}'
-          custom-body: 'release: upgrade node to ${{ steps.new-version.outputs.version }}'
+          title: "release: upgrade node to ${{ steps.new-version.outputs.version }}"
+          body: "release: upgrade node to ${{ steps.new-version.outputs.version }}"
+          branch: "main"
