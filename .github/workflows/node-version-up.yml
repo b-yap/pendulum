@@ -42,7 +42,7 @@ jobs:
       - name: commit new version up
         run: |
           gh api graphql \
-          -F $githubRepository=${{ github.repository }} \
+          -F githubRepository=${{ github.repository }} \
           -F branchName=${{ steps.branch-name.outputs.branch_name }} \
           -F expectedHeadOid=$(git rev-parse HEAD) \
           -F commitMessage="chore: node upgrade to ${{ steps.new-version.outputs.version }}" \
