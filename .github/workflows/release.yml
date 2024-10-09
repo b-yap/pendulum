@@ -17,7 +17,7 @@ jobs:
 #    This job will only run if:
 #     * the pull request is closed and merged to main branch;
 #     * the pull request has the "release:" in its title
-    if: ${{ github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'release:') }}
+    if: ${{ github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'release') }}
     name: ${{ matrix.chain }} need new release
     strategy:
       fail-fast: true
@@ -25,10 +25,10 @@ jobs:
         chain: ["AMPLITUDE", "PENDULUM"]
 #       The job will run for Amplitude IF the pull request has the "amplitude" in its title
         shouldReleaseAmp:
-          - ${{ contains(github.event.pull_request.title, 'amplitude') }}
+          - ${{ contains(github.event.pull_request.labels.*.name, 'release-amplitude') }}
 #       The job will run for Pendulum IF the pull request has the "pendulum" in its title
         shouldReleasePen:
-          - ${{ contains(github.event.pull_request.title, 'pendulum') }}
+          - ${{ contains(github.event.pull_request.labels.*.name, 'release-pendulum') }}
         exclude:
           - shouldReleaseAmp: false
             chain: "AMPLITUDE"
@@ -38,11 +38,5 @@ jobs:
 
     steps:
       - name: trigger gitlab
-        uses: eic/trigger-gitlab-ci@v3
-        with:
-          url: https://gitlab.com
-          project_id: 56492543
-          token: ${{ secrets.GITLABAPI }}
-          ref_name: main
-          variables: |
-            ${{ matrix.chain }}=Y
+        run: |
+          echo "yoshaaaaaaa!!  ${{ matrix.chain }}"
