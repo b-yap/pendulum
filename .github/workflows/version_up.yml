@@ -156,15 +156,15 @@ jobs:
         id: pr-title-labels
         run: |
           if ${{ github.event.inputs.packages-all }} == 'true'; then
-            echo "label=\"release-node,release-amplitude,release-pendulum\"" >> "$GITHUB_OUTPUT"
+            echo "label=release-node,release-amplitude,release-pendulum" >> "$GITHUB_OUTPUT"
           else
             echo "label=release-node" >> "$GITHUB_OUTPUT"
           fi
           
           if ${{ github.event.inputs.specific_version }} == ''; then
-            echo "title=\"release: ${{ github.event.inputs.versioning }} version up ${{ steps.set-pkg.outputs.name }}\"" >> "$GITHUB_OUTPUT"
+            echo "title=release: ${{ github.event.inputs.versioning }} version up ${{ steps.set-pkg.outputs.name }}" >> "$GITHUB_OUTPUT"
           else
-            echo "title=\"release: Force version up ${{ steps.set-pkg.outputs.name }}\"" >> "$GITHUB_OUTPUT"
+            echo "title=release: Force version up ${{ steps.set-pkg.outputs.name }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create Pull Request
