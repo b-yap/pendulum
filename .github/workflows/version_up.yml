@@ -151,22 +151,17 @@ jobs:
           -F files[][path]="node/Cargo.toml" -F files[][contents]=$(base64 -w0 node/Cargo.toml) \
           -F 'query=@.github/api/createCommitOnBranch.gql'
 
-
       - name: Create Pull Request for Specific Version
         if: github.event.inputs.specific_version != ''
-        uses: peter-evans/create-pull-request@v7
+        uses: thomaseizinger/create-pull-request@master
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          title: "release: Force version up ${{ steps.set-pkg.outputs.name }}"
+          body: "${{ steps.read_file.outputs.content }}"
+          head: ${{ steps.new-branch.outputs.name }}
           base: main
-          branch: ${{ steps.new-branch.outputs.name }}
-          delete-branch: true
-          title: 'release: Force version up ${{ steps.set-pkg.outputs.name }}'
-          body: ${{ steps.read_file.outputs.content }}
-          labels: |
-            release-node
-            release-amplitude
-            release-pendulum
-          reviewers: b-yap
+          reviewers: "b-yap"
+          labels: "release-node,release-amplitude,release-pendulum"
 
       - name: Create Pull Request
         if: github.event.inputs.specific_version == ''
@@ -177,4 +172,5 @@ jobs:
           body: "${{ steps.read_file.outputs.content }}"
           head: ${{ steps.new-branch.outputs.name }}
           base: main
-          reviewers: "pendulum-chain/devs"
+          reviewers: "b-yap"
+          labels: "release-node,release-amplitude,release-pendulum"
