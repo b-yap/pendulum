@@ -2,7 +2,7 @@
 authors = ["Pendulum"]
 edition = "2021"
 name = "module-pallet-staking-rpc-runtime-api"
-version = "1.1.0"
+version = "2.3.9"
 
 [dependencies]
 frame-support = { git = "https://github.com/paritytech/polkadot-sdk", branch = "release-polkadot-v1.1.0", default-features = false }
