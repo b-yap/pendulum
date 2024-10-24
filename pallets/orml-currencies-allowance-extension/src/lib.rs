@@ -84,28 +84,16 @@ pub mod pallet {
 	/// Approved balance transfers. Balance is the amount approved for transfer.
 	/// First key is the currency ID, second key is the owner and third key is the delegate.
 	#[pallet::storage]
-	pub type Approvals<T: Config> = StorageNMap<
-		_,
-		(
-			NMapKey<Blake2_128Concat, CurrencyOf<T>>,
-			NMapKey<Blake2_128Concat, T::AccountId>, // owner
-			NMapKey<Blake2_128Concat, T::AccountId>, // delegate
-		),
-		BalanceOf<T>,
-	>;
+	pub type Approvals<T: Config> = StorageNMap<_, (NMapKey<Blake2_128Concat, CurrencyOf<T>>, NMapKey<Blake2_128Concat, T::AccountId>, NMapKey<Blake2_128Concat, T::AccountId>, ), BalanceOf<T>, >;
 
 	/// Currencies that can be used in chain extension
 	#[pallet::storage]
-	pub(super) type AllowedCurrencies<T: Config> =
-		StorageMap<_, Blake2_128Concat, CurrencyOf<T>, ()>;
+	pub(super) type AllowedCurrencies<T: Config> = StorageMap<_, Blake2_128Concat, CurrencyOf<T>, ()>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
-		pub allowed_currencies: Vec<CurrencyOf<T>>,
-	}
+	pub struct GenesisConfig<T: Config> { pub allowed_currencies: Vec<CurrencyOf<T>>, }
 
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
+	impl<T: Config> Default for GenesisConfig<T> { fn default() -> Self {
 			Self { allowed_currencies: vec![] }
 		}
 	}
