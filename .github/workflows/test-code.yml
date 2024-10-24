@@ -1,4 +1,4 @@
-name: Test Code
+name: Test Code with Clippy and Fmt Checks
 
 on:
   pull_request:
@@ -7,6 +7,66 @@ on:
       - main
 
 jobs:
+  fmt-check:
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_NIGHTLY_VERSION: nightly-2024-05-30
+      RUSTFLAGS: "-Dwarnings"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free up Space and Installation
+        uses: ./.github/actions/shared
+
+      - name: Remove rust-toolchain.toml
+        # To make sure that the nightly version will be used all throughout
+        run: |
+          rm /home/runner/work/pendulum/pendulum/rust-toolchain.toml
+
+      - name: Setup nightly Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: ${{ env.RUSTUP_NIGHTLY_VERSION }}
+          components: rustfmt, clippy
+          target: wasm32-unknown-unknown
+
+      - name: Setup nightly Rust as default
+        run: rustup default ${{ env.RUSTUP_NIGHTLY_VERSION }}
+
+      - name: Perform fmt
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: ${{ env.RUSTUP_NIGHTLY_VERSION }}
+          command: fmt
+          args: fmt --all
+
+      - name: Check for Changes
+        id: need-commit
+        run: |
+          git diff --exit-code
+          status=$?
+          echo "status=${status}" >> "$GITHUB_OUTPUT"
+          
+          if status == 0; then
+            echo "No changes detected"
+          else
+            git add --all
+          fi
+
+      - name: Commit Changes
+        if: steps.need-commit.outputs.status == 1
+        uses: qoomon/actions--create-commit@v1
+        id: commit
+        with:
+          message: "chore: fmt"
+          skip-empty: true
+
+      - name: Push Changes
+        if: steps.need-commit.outputs.status == 1
+        run: git push
+
   test-code:
     runs-on: ubuntu-latest
     env:
@@ -36,3 +96,23 @@ jobs:
         with:
           command: test
           args: --release --features=runtime-benchmarks,try-runtime
+
+      - name: Clippy -- Main
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --release --all-features -- -W clippy::all -A clippy::style -A forgetting_copy_types -A forgetting_references
+
+      - name: Clippy -- All Targets (except integration)
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          # We are a bit more forgiving when it comes to the code in tests and only check for correctness
+          args: --release --workspace --all-features --all-targets --exclude runtime-integration-tests -- -A clippy::all -W clippy::correctness -A forgetting_copy_types -A forgetting_references
+
+      - name: Clippy -- Integration
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          # We are a bit more forgiving when it comes to the code in tests and only check for correctness
+          args: --release --package runtime-integration-tests --all-features --all-targets -- -A clippy::all -W clippy::correctness -A forgetting_copy_types -A forgetting_references
