@@ -1,3 +1,4 @@
+// for testing the fmt check
 use crate::{
 	self as orml_tokens_management_extension, default_weights::SubstrateWeight, Config,
 	CurrencyIdCheck,
