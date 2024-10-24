@@ -46,11 +46,13 @@ jobs:
         continue-on-error: true
         id: need-commit
         run: |
-          git diff --exit-code --quiet
-          status=$?
-          echo "status=${status}" >> "$GITHUB_OUTPUT"
+          set +e
           
-          if status == 0; then
+          git diff --exit-code --quiet
+          exitcode="$?"
+          echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+          
+          if exitcode == 0; then
             echo "No changes detected"
           else
             echo "changes detected. adding all"
@@ -58,7 +60,7 @@ jobs:
           fi
 
       - name: Commit Changes
-        if: steps.need-commit.outputs.status == 1
+        if: steps.need-commit.outputs.exitcode == 1
         uses: qoomon/actions--create-commit@v1
         id: commit
         with:
