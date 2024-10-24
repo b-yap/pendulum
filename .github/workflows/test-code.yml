@@ -68,6 +68,8 @@ jobs:
         run: git push
 
   test-code:
+    needs: fmt-check
+    if: needs.fmt-check.result == 'success'
     runs-on: ubuntu-latest
     env:
       # Make sure CI fails on all warnings, including Clippy lints
