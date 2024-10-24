@@ -68,12 +68,7 @@ pub struct TokensChainExtension<T, Tokens, AccountId>(PhantomData<(T, Tokens, Ac
 
 impl<T, Tokens, AccountId> ChainExtension<T> for TokensChainExtension<T, Tokens, AccountId>
 where
-	T: SysConfig
-		+ orml_tokens::Config<CurrencyId = CurrencyId>
-		+ pallet_contracts::Config
-		+ pallet_balances::Config
-		+ orml_currencies::Config<MultiCurrency = Tokens, AccountId = AccountId>
-		+ orml_currencies_allowance_extension::Config,
+	T: SysConfig + orml_tokens::Config<CurrencyId = CurrencyId> + pallet_contracts::Config + pallet_balances::Config + orml_currencies::Config<MultiCurrency = Tokens, AccountId = AccountId> + orml_currencies_allowance_extension::Config,
 	<T as SysConfig>::AccountId: UncheckedFrom<<T as SysConfig>::Hash> + AsRef<[u8]>,
 	Tokens: orml_traits::MultiCurrency<AccountId, CurrencyId = CurrencyId>,
 	AccountId: sp_std::fmt::Debug + Decode + core::clone::Clone,

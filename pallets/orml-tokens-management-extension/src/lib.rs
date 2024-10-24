@@ -1,4 +1,3 @@
-/// this is just to test the fmt
 #![deny(warnings)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
