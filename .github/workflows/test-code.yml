@@ -40,7 +40,7 @@ jobs:
         with:
           toolchain: ${{ env.RUSTUP_NIGHTLY_VERSION }}
           command: fmt
-          args: fmt --all
+          args: --all
 
       - name: Check for Changes
         id: need-commit
