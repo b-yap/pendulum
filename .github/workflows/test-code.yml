@@ -47,7 +47,6 @@ jobs:
         id: need-commit
         run: |
           set +e
-          
           git diff --exit-code --quiet
           exitcode="$?"
           echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
@@ -68,7 +67,7 @@ jobs:
           skip-empty: true
 
       - name: Push Changes
-        if: steps.need-commit.outputs.status == 1
+        if: steps.need-commit.outputs.exitcode == 1
         run: git push
 
   test-code:
