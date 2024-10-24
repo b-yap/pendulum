@@ -43,6 +43,7 @@ jobs:
           args: --all
 
       - name: Check for Changes
+        continue-on-error: true
         id: need-commit
         run: |
           git diff --exit-code --quiet
