@@ -17,27 +17,16 @@ use std::sync::Arc;
 
 #[rpc(client, server)]
 pub trait ParachainStakingApi<BlockHash, AccountId, Balance>
-where
-	Balance: Codec + MaybeDisplay + MaybeFromStr,
-	AccountId: Codec,
-{
+where Balance: Codec + MaybeDisplay + MaybeFromStr, AccountId: Codec, {
 	#[method(name = "staking_getUnclaimedStakingRewards")]
-	fn get_unclaimed_staking_rewards(
-		&self,
-		account: AccountId,
-		at: Option<BlockHash>,
-	) -> RpcResult<BalanceWrapper<Balance>>;
+	fn get_unclaimed_staking_rewards(&self, account: AccountId, at: Option<BlockHash>, ) -> RpcResult<BalanceWrapper<Balance>>;
 
 	#[method(name = "staking_getStakingRates")]
 	fn get_staking_rates(&self, at: Option<BlockHash>) -> RpcResult<StakingRates>;
 }
 
 fn internal_err<T: ToString>(message: T) -> JsonRpseeError {
-	JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
-		ErrorCode::InternalError.code(),
-		message.to_string(),
-		None::<()>,
-	)))
+	JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(ErrorCode::InternalError.code(), message.to_string(), None::<()>, )))
 }
 
 /// A struct that implements the [`Staking`].

@@ -1,7 +1,4 @@
-use crate::{
-	self as orml_tokens_management_extension, default_weights::SubstrateWeight, Config,
-	CurrencyIdCheck,
-};
+use crate::{self as orml_tokens_management_extension, default_weights::SubstrateWeight, Config, CurrencyIdCheck, };
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, Everything},

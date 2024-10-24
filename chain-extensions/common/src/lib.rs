@@ -101,11 +101,8 @@ impl From<DispatchError> for ChainExtensionOutcome {
 			DispatchError::ConsumerRemaining => ChainExtensionOutcome::ConsumerRemaining,
 			DispatchError::NoProviders => ChainExtensionOutcome::NoProviders,
 			DispatchError::TooManyConsumers => ChainExtensionOutcome::TooManyConsumers,
-			DispatchError::Token(token_err) =>
-				ChainExtensionOutcome::Token(ChainExtensionTokenError::from(token_err)),
-			DispatchError::Arithmetic(arithmetic_error) => ChainExtensionOutcome::Arithmetic(
-				ChainExtensionArithmeticError::from(arithmetic_error),
-			),
+			DispatchError::Token(token_err) => ChainExtensionOutcome::Token(ChainExtensionTokenError::from(token_err)),
+			DispatchError::Arithmetic(arithmetic_error) => ChainExtensionOutcome::Arithmetic(ChainExtensionArithmeticError::from(arithmetic_error), ),
 			_ => ChainExtensionOutcome::Unknown,
 		}
 	}
@@ -151,13 +148,7 @@ impl ToTrimmedVec for [u8; 32] {
 /// trim_trailing_zeros takes an input slice and returns it without the trailing zeros.
 fn trim_trailing_zeros(slice: &[u8]) -> &[u8] {
 	let mut trim_amount = 0;
-	for el in slice.iter().rev() {
-		if *el == 0 {
-			trim_amount += 1;
-		} else {
-			break
-		}
-	}
+	for el in slice.iter().rev() { if *el == 0 { trim_amount += 1; } else { break } }
 	&slice[..slice.len() - trim_amount]
 }
 

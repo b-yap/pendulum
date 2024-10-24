@@ -1,23 +1,24 @@
-name: Test Code
+name: Test Code with Clippy and Fmt Checks
 
 on:
   pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
 
 jobs:
-  test-code:
+  fmt-check:
     runs-on: ubuntu-latest
     env:
-      # Make sure CI fails on all warnings, including Clippy lints
+      RUSTUP_NIGHTLY_VERSION: nightly-2024-05-30
       RUSTFLAGS: "-Dwarnings"
 
     steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/shared
+      - name: Checkout
+        uses: actions/checkout@v4
+
+#      - name: Free up Space and Installation
+#        uses: ./.github/actions/shared
 
       - name: Remove rust-toolchain.toml
         # To make sure that the nightly version will be used all throughout
@@ -25,14 +26,64 @@ jobs:
           rm /home/runner/work/pendulum/pendulum/rust-toolchain.toml
 
       - name: Setup nightly Rust toolchain
-        uses:  dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly-2024-05-30
+          toolchain: ${{ env.RUSTUP_NIGHTLY_VERSION }}
           components: rustfmt, clippy
           target: wasm32-unknown-unknown
 
       - name: Setup nightly Rust as default
-        run: rustup default nightly-2024-05-30
+        run: rustup default ${{ env.RUSTUP_NIGHTLY_VERSION }}
+
+      - name: Perform fmt
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: ${{ env.RUSTUP_NIGHTLY_VERSION }}
+          command: fmt
+          args: --all
+
+      - name: Check for Changes
+        continue-on-error: true
+        id: need-commit
+        run: |
+          set +e
+          git diff --exit-code --quiet
+          exitcode="$?"
+          echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+          
+          if exitcode == 0; then
+            echo "No changes detected"
+          else
+            echo "changes detected. adding all"
+            git add --all
+          fi
+
+      - name: Commit Changes
+        if: steps.need-commit.outputs.exitcode == 1
+        uses: qoomon/actions--create-commit@v1
+        id: commit
+        with:
+          message: "chore: fmt"
+          skip-empty: true
+
+      - name: Push Changes
+        if: steps.need-commit.outputs.exitcode == 1
+        run: git push
+
+  test-code:
+    needs: fmt-check
+    if: needs.fmt-check.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      # Make sure CI fails on all warnings, including Clippy lints
+      RUSTFLAGS: "-Dwarnings"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free up Space and Installation
+        uses: ./.github/actions/shared
 
       - name: Install Protoc
         uses: arduino/setup-protoc@v1
@@ -42,30 +93,31 @@ jobs:
       - name: Test
         uses: actions-rs/cargo@v1
         with:
-          toolchain: nightly-2024-05-30
           command: test
           args: --release
+
+      - name: Test for Runtime Benchmarks
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --release --features=runtime-benchmarks,try-runtime
 
       - name: Clippy -- Main
         uses: actions-rs/cargo@v1
         with:
-          toolchain: nightly-2024-05-30
           command: clippy
           args: --release --all-features -- -W clippy::all -A clippy::style -A forgetting_copy_types -A forgetting_references
 
       - name: Clippy -- All Targets (except integration)
         uses: actions-rs/cargo@v1
         with:
-          toolchain: nightly-2024-05-30
           command: clippy
           # We are a bit more forgiving when it comes to the code in tests and only check for correctness
-          args: --workspace --release --all-features --all-targets --exclude runtime-integration-tests -- -A clippy::all -W clippy::correctness -A forgetting_copy_types -A forgetting_references
+          args: --release --workspace --all-features --all-targets --exclude runtime-integration-tests -- -A clippy::all -W clippy::correctness -A forgetting_copy_types -A forgetting_references
 
       - name: Clippy -- Integration
         uses: actions-rs/cargo@v1
         with:
-          toolchain: nightly-2024-05-30
           command: clippy
           # We are a bit more forgiving when it comes to the code in tests and only check for correctness
-          args: --package runtime-integration-tests --release --all-features --all-targets -- -A clippy::all -W clippy::correctness -A forgetting_copy_types -A forgetting_references
-    
+          args: --release --package runtime-integration-tests --all-features --all-targets -- -A clippy::all -W clippy::correctness -A forgetting_copy_types -A forgetting_references
