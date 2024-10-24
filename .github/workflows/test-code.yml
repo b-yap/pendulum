@@ -17,8 +17,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Free up Space and Installation
-        uses: ./.github/actions/shared
+#      - name: Free up Space and Installation
+#        uses: ./.github/actions/shared
 
       - name: Remove rust-toolchain.toml
         # To make sure that the nightly version will be used all throughout
@@ -45,13 +45,14 @@ jobs:
       - name: Check for Changes
         id: need-commit
         run: |
-          git diff --exit-code
+          git diff --exit-code --quiet
           status=$?
           echo "status=${status}" >> "$GITHUB_OUTPUT"
           
           if status == 0; then
             echo "No changes detected"
           else
+            echo "changes detected. adding all"
             git add --all
           fi
 
