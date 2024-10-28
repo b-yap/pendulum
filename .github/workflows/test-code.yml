@@ -128,7 +128,7 @@ jobs:
           echo "Mutation Payload: $mutation_payload" 
           
           # Send the mutation request to GitHub's GraphQL API and capture the response
-          RESPONSE=$(curl -X POST -H "Authorization: bearer $GITHUB_TOKEN" \
+          RESPONSE=$(curl -X POST -H "Authorization: bearer ${{ secrets.GITHUB_TOKEN}}" \
             -H "Content-Type: application/json" \
             -d "$mutation_payload" https://api.github.com/graphql)
           
