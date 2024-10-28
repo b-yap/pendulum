@@ -141,7 +141,10 @@ pub mod pallet {
 
 			// Check if the supplied amount of currencies is less than the maximum allowed
 			let max_allowed_currencies: usize = T::MaxAllowedCurrencies::get() as usize;
-			ensure!(currencies.len() <= max_allowed_currencies,Error::<T>::ExceedsNumberOfAllowedCurrencies);
+			ensure!(
+				currencies.len() <= max_allowed_currencies,
+				Error::<T>::ExceedsNumberOfAllowedCurrencies
+			);
 
 			for i in currencies.clone() {
 				AllowedCurrencies::<T>::insert(i, ());
@@ -150,7 +153,10 @@ pub mod pallet {
 			// Check if the resulting vector of allowed currencies is less than the maximum allowed.
 			// We check after the insertion to avoid counting duplicates.
 			let allowed_currencies_len: usize = AllowedCurrencies::<T>::iter().count();
-			ensure!(allowed_currencies_len <= max_allowed_currencies,Error::<T>::ExceedsNumberOfAllowedCurrencies);
+			ensure!(
+				allowed_currencies_len <= max_allowed_currencies,
+				Error::<T>::ExceedsNumberOfAllowedCurrencies
+			);
 
 			Self::deposit_event(Event::AllowedCurrenciesAdded { currencies });
 			Ok(())
@@ -163,14 +169,19 @@ pub mod pallet {
 		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config>::WeightInfo::remove_allowed_currencies(T::MaxAllowedCurrencies::get()))]
 		#[transactional]
-		pub fn remove_allowed_currencies(origin: OriginFor<T>, currencies: Vec<CurrencyOf<T>>, ) -> DispatchResult {
+		pub fn remove_allowed_currencies(
+			origin: OriginFor<T>,
+			currencies: Vec<CurrencyOf<T>>,
+		) -> DispatchResult {
 			ensure_root(origin)?;
 
 			// Check if the supplied amount of currencies is less than the maximum allowed
 			// Although this is not strictly necessary, it is a good sanity check and prevents callers
 			// from using too large currency vectors.
 			let max_allowed_currencies: usize = T::MaxAllowedCurrencies::get() as usize;
-			ensure!(currencies.len() <= max_allowed_currencies,Error::<T>::ExceedsNumberOfAllowedCurrencies
+			ensure!(
+				currencies.len() <= max_allowed_currencies,
+				Error::<T>::ExceedsNumberOfAllowedCurrencies
 			);
 
 			for i in currencies.clone() {
