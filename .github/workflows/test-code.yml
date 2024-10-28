@@ -12,6 +12,8 @@ jobs:
     env:
       RUSTUP_NIGHTLY_VERSION: nightly-2024-05-30
       RUSTFLAGS: "-Dwarnings"
+    outputs:
+      output: ${{ steps.need-commit.outputs.exitcode }}
 
     steps:
       - name: Checkout
@@ -58,21 +60,26 @@ jobs:
             git add --all
           fi
 
+      - name: Set github actions username and email
+        if: steps.need-commit.outputs.exitcode == 1
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
       - name: Commit Changes
         if: steps.need-commit.outputs.exitcode == 1
-        uses: qoomon/actions--create-commit@v1
-        id: commit
-        with:
-          message: "chore: fmt"
-          skip-empty: true
+        run: |
+          git add .
+          git commit -S -m "[chore]: cargo fmt"
 
       - name: Push Changes
         if: steps.need-commit.outputs.exitcode == 1
-        run: git push
+        run: |
+          git push
 
   test-code:
     needs: fmt-check
-    if: needs.fmt-check.result == 'success'
+    if: needs.fmt-check.outputs.output == 0
     runs-on: ubuntu-latest
     env:
       # Make sure CI fails on all warnings, including Clippy lints
