@@ -8,9 +8,7 @@ use sp_std::marker::PhantomData;
 
 use spacewalk_primitives::CurrencyId;
 
-use zenlink_protocol::{
-	AssetId, Config as ZenlinkConfig, GenerateLpAssetId, LocalAssetHandler, ZenlinkMultiAssets,
-};
+use zenlink_protocol::{AssetId, Config as ZenlinkConfig, GenerateLpAssetId, LocalAssetHandler, ZenlinkMultiAssets,};
 pub type ZenlinkAssetId = zenlink_protocol::AssetId;
 
 use runtime_common::{zenlink, zenlink::*};
