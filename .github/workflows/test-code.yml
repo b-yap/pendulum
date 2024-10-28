@@ -57,7 +57,6 @@ jobs:
             echo "No changes detected"
           else
             echo "changes detected. adding all"
-            git add --all
           fi
 
       - name: Set github actions username and email
@@ -66,16 +65,83 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
 
-      - name: Commit Changes
-        if: steps.need-commit.outputs.exitcode == 1
-        run: |
-          git add .
-          git commit -S -m "[chore]: cargo fmt"
+          git diff --name-only > changed_files.txt
+          echo "List files amended by formatter"
+          cat changed_files.txt
+          
+          commit_oid=$(git rev-parse HEAD)
 
-      - name: Push Changes
-        if: steps.need-commit.outputs.exitcode == 1
-        run: |
-          git push
+          # Initialize an empty JSON object for the additions
+          files_for_commit='{"additions": []}'
+
+          # Read the changed files from changed_files.txt
+          while IFS= read -r file; do
+            if [[ -f "$file" ]]; then
+              # Get the content for the file
+              file_content="$(cat "$file")"
+
+              # Base64 encode the contents of the file
+              base64_content=$(base64 -w 0 <<< "$file_content")
+
+              # Construct a JSON object for this file and append it to the additions array
+              files_for_commit=$(echo "$files_for_commit" | jq --arg path "$file" --arg content "$base64_content" \
+              '.additions += [{ "path": $path, "contents": $content }]')
+            fi
+          done < changed_files.txt
+
+          # Output the final JSON array
+          echo "$files_for_commit" > files_for_commit.json
+          
+          # Error handling for `jq` output
+          echo "Check for valid json output"
+          if ! jq . files_for_commit.json; then
+            echo "Error reading files_for_commit.json"
+            exit 1
+          fi
+          
+          commit_message="Commit changes made by code formatters"
+
+          # Prepare the mutation payload
+          mutation_payload=$(jq -n \
+            --arg branch_name "${{ github.ref }}" \
+            --arg commit_oid "$commit_oid" \
+            --arg commit_message "$commit_message" \
+            --arg repo_name "${{ github.repository }}" \
+            --argjson fileChanges "$(jq -c . < files_for_commit.json)" \
+            '{
+              query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+              variables: {
+                input: {
+                  branch: {
+                    repositoryNameWithOwner: $repo_name,
+                    branchName: $branch_name
+                  },
+                  message: {
+                    headline: $commit_message
+                  },
+                  fileChanges: $fileChanges,
+                  expectedHeadOid: $commit_oid
+                }
+              }
+            }')
+
+          echo "Mutation Payload: $mutation_payload" 
+          
+          # Send the mutation request to GitHub's GraphQL API and capture the response
+          RESPONSE=$(curl -X POST -H "Authorization: bearer $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$mutation_payload" https://api.github.com/graphql)
+          
+          # Parse the commit OID from the response
+          COMMIT_OID=$(echo "$RESPONSE" | jq -r ".data.createCommitOnBranch.commit.oid")
+          
+          # Check if the commit was successfully created
+          if [ "$commit_oid" != "null" ]; then
+            echo "Commit successfully created with OID: $commit_oid"
+          else
+            echo "Error creating commit: $RESPONSE"
+          fi
+
 
   test-code:
     needs: fmt-check
