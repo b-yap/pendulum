@@ -103,7 +103,7 @@ jobs:
 
           # Prepare the mutation payload
           mutation_payload=$(jq -n \
-            --arg branch_name "${{ github.ref }}" \
+            --arg branch_name "${{ github.head_ref }}" \
             --arg commit_oid "$commit_oid" \
             --arg commit_message "$commit_message" \
             --arg repo_name "${{ github.repository }}" \
