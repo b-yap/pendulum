@@ -144,8 +144,6 @@ jobs:
 
 
   test-code:
-    needs: fmt-check
-    if: needs.fmt-check.outputs.output == 0
     runs-on: ubuntu-latest
     env:
       # Make sure CI fails on all warnings, including Clippy lints

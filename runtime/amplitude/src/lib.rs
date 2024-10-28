@@ -154,18 +154,10 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, RuntimeCall, Si
 
 use runtime_common::asset_registry::StringLimit;
 
-parameter_types! {
-	pub const InactiveAccounts: Vec<AccountId> = Vec::new();
-}
+parameter_types! { pub const InactiveAccounts: Vec<AccountId> = Vec::new();}
 
 /// Executive: handles dispatch to the various modules.
-pub type Executive = frame_executive::Executive<
-	Runtime,
-	Block,
-	frame_system::ChainContext<Runtime>,
-	Runtime,
-	AllPalletsWithSystem,
->;
+pub type Executive = frame_executive::Executive<Runtime, Block, frame_system::ChainContext<Runtime>, Runtime, AllPalletsWithSystem, >;
 
 pub struct ConvertPrice;
 

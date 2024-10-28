@@ -6,25 +6,18 @@ use frame_support::{
 };
 use log;
 use orml_asset_registry::{AssetRegistryTrader, FixedRateAssetRegistryTrader};
-use orml_traits::{
-	location::{RelativeReserveProvider, Reserve},
-	parameter_type_with_key,
-};
+use orml_traits::{location::{RelativeReserveProvider, Reserve}, parameter_type_with_key, };
 use orml_xcm_support::{DepositToAlternative, IsNativeConcrete, MultiCurrencyAdapter};
 use pallet_xcm::XcmPassthrough;
 use polkadot_parachain::primitives::Sibling;
 use sp_runtime::traits::Convert;
 use xcm::latest::{prelude::*, Weight as XCMWeight};
-use xcm_builder::{
-	AccountId32Aliases, AllowKnownQueryResponses, AllowSubscriptionsFrom,
+use xcm_builder::{AccountId32Aliases, AllowKnownQueryResponses, AllowSubscriptionsFrom,
 	AllowTopLevelPaidExecutionFrom, AllowUnpaidExecutionFrom, EnsureXcmOrigin, FixedWeightBounds,
 	ParentIsPreset, RelayChainAsNative, SiblingParachainAsNative, SiblingParachainConvertsVia,
 	SignedAccountId32AsNative, SignedToAccountId32, SovereignSignedViaLocation, TakeWeightCredit,
 };
-use xcm_executor::{
-	traits::{Properties, ShouldExecute},
-	XcmExecutor,
-};
+use xcm_executor::{traits::{Properties, ShouldExecute}, XcmExecutor, };
 
 use runtime_common::{asset_registry::FixedConversionRateProvider, CurrencyIdConvert};
 
@@ -32,11 +25,8 @@ use cumulus_primitives_utility::XcmFeesTo32ByteAccount;
 
 use crate::ConstU32;
 
-use super::{
-	AccountId, AmplitudeTreasuryAccount, AssetRegistry, Balance, Balances, Currencies, CurrencyId,
-	ParachainInfo, ParachainSystem, PolkadotXcm, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin,
-	XcmpQueue,
-};
+use super::{AccountId, AmplitudeTreasuryAccount, AssetRegistry, Balance, Balances, Currencies, CurrencyId,
+	ParachainInfo, ParachainSystem, PolkadotXcm, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, XcmpQueue, };
 use frame_system::EnsureRoot;
 
 parameter_types! {
