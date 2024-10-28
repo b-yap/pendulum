@@ -133,11 +133,11 @@ jobs:
             -d "$mutation_payload" https://api.github.com/graphql)
           
           # Parse the commit OID from the response
-          COMMIT_OID=$(echo "$RESPONSE" | jq -r ".data.createCommitOnBranch.commit.oid")
+          RESP_COMMIT_OID=$(echo "$RESPONSE" | jq -r ".data.createCommitOnBranch.commit.oid")
           
           # Check if the commit was successfully created
-          if [ "$commit_oid" != "null" ]; then
-            echo "Commit successfully created with OID: $commit_oid"
+          if [ "$RESP_COMMIT_OID" != "null" ]; then
+            echo "Commit successfully created with OID: $RESP_COMMIT_OID"
           else
             echo "Error creating commit: $RESPONSE"
           fi
