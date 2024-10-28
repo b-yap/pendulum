@@ -1,0 +1,85 @@
+# This action triggers a GitLab CI job that generates the release notes
+name: Node Release
+env:
+  RUSTUP_NIGHTLY_VERSION: nightly-2024-05-30
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - 'main'
+
+jobs:
+  release_check:
+#    This job will only run if:
+#     * the pull request is closed and merged to main branch;
+#     * the pull request has the label "release-node"
+    if: ${{ github.event.pull_request.merged == true }}
+    name: Run Cargo Fmt
+    strategy:
+      fail-fast: true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Remove rust-toolchain.toml
+        # To make sure that the nightly version will be used all throughout
+        run: |
+          rm /home/runner/work/pendulum/pendulum/rust-toolchain.toml
+
+      - name: Setup nightly Rust toolchain
+        uses:  dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: ${ env.RUSTUP_NIGHTLY_VERSION }
+          components: rustfmt, clippy
+          target: wasm32-unknown-unknown
+
+      - name: Setup nightly Rust as default
+        run: rustup default ${ env.RUSTUP_NIGHTLY_VERSION }
+
+      - name: Set github actions username and email
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Perform fmt
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: ${{ env.RUSTUP_NIGHTLY_VERSION }}
+          command: fmt
+          args: --all
+
+      - name: Perform cargo fmt
+        run: |
+          git add .
+          git commit -S -m "auto: cargo fmt"
+
+      - name: Check for Changes
+        continue-on-error: true
+        id: need-commit
+        run: |
+          set +e
+          git diff --exit-code --quiet
+          exitcode="$?"
+          echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+          
+          if exitcode == 0; then
+            echo "No changes detected"
+          else
+            echo "changes detected. adding all"
+            git add --all
+          fi
+
+      - name: Commit Changes
+        if: steps.need-commit.outputs.exitcode == 1
+        run: |
+          git add .
+          git commit -S -m "[chore]: cargo fmt"
+
+      - name: Push Changes
+        if: steps.need-commit.outputs.exitcode == 1
+        run: git push

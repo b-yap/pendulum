@@ -23,9 +23,15 @@ mod tests;
 
 pub use pallet::*;
 
-pub(crate) type BalanceOf<T> = <<T as orml_currencies::Config>::MultiCurrency as orml_traits::MultiCurrency<<T as frame_system::Config>::AccountId, >>::Balance;
+pub(crate) type BalanceOf<T> =
+	<<T as orml_currencies::Config>::MultiCurrency as orml_traits::MultiCurrency<
+		<T as frame_system::Config>::AccountId,
+	>>::Balance;
 
-pub(crate) type CurrencyOf<T> = <<T as orml_currencies::Config>::MultiCurrency as orml_traits::MultiCurrency<<T as frame_system::Config>::AccountId, >>::CurrencyId;
+pub(crate) type CurrencyOf<T> =
+	<<T as orml_currencies::Config>::MultiCurrency as orml_traits::MultiCurrency<
+		<T as frame_system::Config>::AccountId,
+	>>::CurrencyId;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -80,14 +86,18 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Approvals<T: Config> = StorageNMap<
 		_,
-		(NMapKey<Blake2_128Concat, CurrencyOf<T>>, NMapKey<Blake2_128Concat, T::AccountId>, NMapKey<Blake2_128Concat, T::AccountId>, ),
+		(
+			NMapKey<Blake2_128Concat, CurrencyOf<T>>,
+			NMapKey<Blake2_128Concat, T::AccountId>,
+			NMapKey<Blake2_128Concat, T::AccountId>,
+		),
 		BalanceOf<T>,
 	>;
 
 	/// Currencies that can be used in chain extension
 	#[pallet::storage]
 	pub(super) type AllowedCurrencies<T: Config> =
-	StorageMap<_, Blake2_128Concat, CurrencyOf<T>, ()>;
+		StorageMap<_, Blake2_128Concat, CurrencyOf<T>, ()>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -123,7 +133,10 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::add_allowed_currencies(T::MaxAllowedCurrencies::get()))]
 		#[transactional]
-		pub fn add_allowed_currencies(origin: OriginFor<T>, currencies: Vec<CurrencyOf<T>>, ) -> DispatchResult {
+		pub fn add_allowed_currencies(
+			origin: OriginFor<T>,
+			currencies: Vec<CurrencyOf<T>>,
+		) -> DispatchResult {
 			ensure_root(origin)?;
 
 			// Check if the supplied amount of currencies is less than the maximum allowed
