@@ -10,11 +10,10 @@ use crate::mock::units;
 #[macro_export]
 macro_rules! genesis_gen {
 	($runtime:ident, $para_account_id: ident, $asset_metadata: ident) => {{
-		use crate::mock::units;
+		use crate::{genesis::SAFE_XCM_VERSION, mock::units};
 		use integration_tests_common::constants::{accounts, collators};
 		use spacewalk_primitives::CurrencyId;
 		use $runtime::BuildStorage;
-		use crate::genesis::SAFE_XCM_VERSION;
 
 		let token_balances = accounts::init_balances()
 			.iter()
@@ -80,6 +79,7 @@ macro_rules! genesis_gen {
 }
 
 pub fn genesis_sibling(para_id: u32) -> Storage {
+	use crate::genesis::SAFE_XCM_VERSION;
 	use sibling::BuildStorage;
 
 	let token_balances = accounts::init_balances()
