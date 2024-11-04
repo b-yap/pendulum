@@ -88,8 +88,8 @@ pub mod pallet {
 		_,
 		(
 			NMapKey<Blake2_128Concat, CurrencyOf<T>>,
-			NMapKey<Blake2_128Concat, T::AccountId>, // owner
-			NMapKey<Blake2_128Concat, T::AccountId>, // delegate
+			NMapKey<Blake2_128Concat, T::AccountId>,
+			NMapKey<Blake2_128Concat, T::AccountId>,
 		),
 		BalanceOf<T>,
 	>;

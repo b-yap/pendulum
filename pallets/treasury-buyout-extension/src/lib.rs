@@ -14,9 +14,7 @@ mod tests;
 
 mod types;
 
-use crate::{
-	types::{AccountIdOf, Amount, BalanceOf, CurrencyIdOf},
-};
+use crate::types::{AccountIdOf, Amount, BalanceOf, CurrencyIdOf};
 
 pub use crate::default_weights::WeightInfo;
 use codec::{Decode, Encode};

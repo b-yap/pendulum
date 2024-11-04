@@ -5,24 +5,24 @@ use chain_extension_common::{ChainExtensionOutcome, ChainExtensionTokenError};
 use codec::Encode;
 use frame_support::{
 	pallet_prelude::{Decode, Get, PhantomData},
+	traits::tokens::{fungible, fungibles, Fortitude, Preservation},
 	DefaultNoBound,
 };
-use frame_support::traits::tokens::{fungibles,fungible, Preservation, Fortitude};
 use orml_currencies::WeightInfo;
 use orml_currencies_allowance_extension::{
 	default_weights::WeightInfo as AllowanceWeightInfo, Config as AllowanceConfig,
 };
 use orml_traits::MultiCurrency;
+use pallet_balances;
 use pallet_contracts::chain_extension::{
 	ChainExtension, Environment, Ext, InitState, RetVal, SysConfig,
 };
 use sp_core::crypto::UncheckedFrom;
-use sp_std::vec::Vec;
 use sp_runtime::DispatchError;
+use sp_std::vec::Vec;
 use sp_tracing::{error, trace};
 use sp_weights::Weight;
-use spacewalk_primitives::{CurrencyId};
-use pallet_balances;
+use spacewalk_primitives::CurrencyId;
 pub(crate) type BalanceOfForChainExt<T> =
 	<<T as orml_currencies::Config>::MultiCurrency as orml_traits::MultiCurrency<
 		<T as frame_system::Config>::AccountId,
@@ -157,7 +157,7 @@ where
 	T: SysConfig
 		+ orml_tokens::Config<CurrencyId = CurrencyId>
 		+ pallet_contracts::Config
-	+ orml_currencies::Config<MultiCurrency = Tokens, AccountId = AccountId>
+		+ orml_currencies::Config<MultiCurrency = Tokens, AccountId = AccountId>
 		+ pallet_balances::Config
 		+ orml_currencies_allowance_extension::Config,
 	E: Ext<T = T>,
@@ -182,9 +182,20 @@ where
 	}
 
 	let balance_encoded: Vec<u8> = if currency_id == T::GetNativeCurrencyId::get() {
-		<pallet_balances::Pallet<T> as fungible::Inspect<T::AccountId>>::reducible_balance(&account_id, Preservation::Preserve, Fortitude::Polite).encode()
+		<pallet_balances::Pallet<T> as fungible::Inspect<T::AccountId>>::reducible_balance(
+			&account_id,
+			Preservation::Preserve,
+			Fortitude::Polite,
+		)
+		.encode()
 	} else {
-		<orml_tokens::Pallet<T> as fungibles::Inspect<T::AccountId>>::reducible_balance(currency_id, &account_id, Preservation::Preserve, Fortitude::Polite).encode()
+		<orml_tokens::Pallet<T> as fungibles::Inspect<T::AccountId>>::reducible_balance(
+			currency_id,
+			&account_id,
+			Preservation::Preserve,
+			Fortitude::Polite,
+		)
+		.encode()
 	};
 
 	if let Err(_) = env.write(&balance_encoded, false, None) {

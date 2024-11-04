@@ -1,0 +1,164 @@
+# This action triggers a GitLab CI job that generates the release notes
+name: Node Release
+env:
+  RUSTUP_NIGHTLY_VERSION: nightly-2024-05-30
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - 'main'
+
+jobs:
+  release_check:
+#    This job will only run if:
+#     * the pull request is closed and merged to main branch;
+#     * the pull request has the label "release-node"
+    if: ${{ github.event.pull_request.merged == true }}
+    name: Run Cargo Fmt
+    strategy:
+      fail-fast: true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Remove rust-toolchain.toml
+        # To make sure that the nightly version will be used all throughout
+        run: |
+          rm /home/runner/work/pendulum/pendulum/rust-toolchain.toml
+
+      - name: Setup nightly Rust toolchain
+        uses:  dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: ${ env.RUSTUP_NIGHTLY_VERSION }
+          components: rustfmt, clippy
+          target: wasm32-unknown-unknown
+
+      - name: Setup nightly Rust as default
+        run: rustup default ${ env.RUSTUP_NIGHTLY_VERSION }
+
+      - name: Set github actions sestup
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          git diff --staged --name-only > changed_files.txt
+          echo "List files amended by formatter"
+          cat changed_files.txt
+          
+          commit_oid=$(git rev-parse HEAD)
+          echo "commit_oid=$commit_oid" >> $GITHUB_ENV
+
+          # Initialize an empty JSON object for the additions
+          files_for_commit='{"additions": []}'
+
+          # Read the changed files from changed_files.txt
+          while IFS= read -r file; do
+            if [[ -f "$file" ]]; then
+              # Get the content for the file
+              file_content="$(cat "$file")"
+
+              # Base64 encode the contents of the file
+              base64_content=$(base64 -w 0 <<< "$file_content")
+
+              # Construct a JSON object for this file and append it to the additions array
+              files_for_commit=$(echo "$files_for_commit" | jq --arg path "$file" --arg content "$base64_content" \
+              '.additions += [{ "path": $path, "contents": $content }]')
+            fi
+          done < changed_files.txt
+
+          # Output the final JSON array
+          echo "$files_for_commit" > files_for_commit.json
+          
+         # Error handling for `jq` output
+          echo "Check for valid json output"
+          if ! jq . files_for_commit.json; then
+            echo "Error reading files_for_commit.json"
+            exit 1
+          fi
+          
+          commit_message="Commit changes made by code formatters"
+
+          # Prepare the mutation payload
+          mutation_payload=$(jq -n \
+            --arg branch_name "${{ github.ref_name }}" \
+            --arg commit_oid "$commit_oid" \
+            --arg commit_message "$commit_message" \
+            --arg repo_name "${{ github.repository }}" \
+            --arg repo_name "$repo_name" \
+            --argjson fileChanges "$(jq -c . < files_for_commit.json)" \
+            '{
+              query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+              variables: {
+                input: {
+                  branch: {
+                    repositoryNameWithOwner: $repo_owner,
+                    branchName: $branch_name
+                  },
+                  message: {
+                    headline: $commit_message
+                  },
+                  fileChanges: $fileChanges,
+                  expectedHeadOid: $commit_oid
+                }
+              }
+            }')
+
+          echo "Mutation Payload: $mutation_payload" 
+          
+          # Send the mutation request to GitHub's GraphQL API and capture the response
+          RESPONSE=$(curl -X POST -H "Authorization: bearer $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$mutation_payload" https://api.github.com/graphql)
+          
+          # Parse the commit OID from the response
+          COMMIT_OID=$(echo "$RESPONSE" | jq -r ".data.createCommitOnBranch.commit.oid")
+          
+          # Check if the commit was successfully created
+          if [ "$COMMIT_OID" != "null" ]; then
+            echo "Commit successfully created with OID: $COMMIT_OID"
+          else
+            echo "Error creating commit: $RESPONSE"
+          fi
+
+      - name: Perform fmt
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: ${{ env.RUSTUP_NIGHTLY_VERSION }}
+          command: fmt
+          args: --all
+
+      - name: Perform cargo fmt
+        run: |
+          git add .
+          git commit -S -m "auto: cargo fmt"
+
+      - name: Check for Changes
+        continue-on-error: true
+        id: need-commit
+        run: |
+          set +e
+          git diff --exit-code --quiet
+          exitcode="$?"
+          echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+          
+          if exitcode == 0; then
+            echo "No changes detected"
+          else
+            echo "changes detected. adding all"
+            git add --all
+          fi
+
+      - name: Commit Changes
+        if: steps.need-commit.outputs.exitcode == 1
+        run: |
+          git add .
+          git commit -S -m "[chore]: cargo fmt"
+
+      - name: Push Changes
+        if: steps.need-commit.outputs.exitcode == 1
+        run: git push
